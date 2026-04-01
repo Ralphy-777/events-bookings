@@ -26,7 +26,7 @@ export default function OrganizerDashboard() {
 
     const fetchPendingEvents = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/organizer/pending-events/', {
+        const res = await fetch('https://event-backend-5-v9tx.onrender.com/api/organizer/pending-events/', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

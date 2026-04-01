@@ -28,7 +28,7 @@ export default function EventsAdd() {
 
     try {
       const token = localStorage.getItem('organizerToken');
-      const response = await fetch('http://localhost:8000/api/events/', {
+      const response = await fetch('https://event-backend-5-v9tx.onrender.com/api/events/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

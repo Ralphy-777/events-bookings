@@ -45,7 +45,7 @@ export default function ClientDashboard() {
     const token = localStorage.getItem('clientToken');
 
     fetch(
-      `http://localhost:8000/api/user/client/check-availability/?date=${date}`,
+      `${process.env.NEXT_PUBLIC_API_BASE || 'https://event-backend-5-v9tx.onrender.com/api/user'}/client/check-availability/?date=${date}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -67,7 +67,7 @@ export default function ClientDashboard() {
   }, [eventType, capacity, date]);
 
   const generateConcertQR = async (generatedEventId: string) => {
-    const paymentURL = `http://localhost:3000/ticket-payment?eventId=${generatedEventId}`;
+    const paymentURL = `${window.location.origin}/ticket-payment?eventId=${generatedEventId}`;
     const qr = await QRCode.toDataURL(paymentURL);
     setQrCode(qr);
   };
@@ -94,7 +94,7 @@ export default function ClientDashboard() {
 
     try {
       const token = localStorage.getItem('clientToken');
-      const response = await fetch('http://localhost:8000/api/user/bookings/create/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || 'https://event-backend-5-v9tx.onrender.com/api/user'}/bookings/create/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
