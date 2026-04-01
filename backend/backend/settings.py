@@ -194,11 +194,10 @@ PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
 # Frontend URL
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://event-bookings-eosin.vercel.app')
 
-# Cache — use database cache on Render (no Redis needed)
+# Cache — use local memory cache (safe default, no setup needed)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-        'LOCATION': 'django_cache_table',
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 }
 
