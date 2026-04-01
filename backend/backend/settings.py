@@ -8,14 +8,44 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def env_list(name: str, default: str = '') -> list[str]:
+    value = os.environ.get(name, default)
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value).split(',') if item.strip()]
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def with_extra_hosts(*hosts: str) -> list[str]:
+    items: list[str] = []
+    for host in hosts:
+        if host and host not in items:
+            items.append(host)
+    return items
+
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-insecure-key-change-in-production')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # Allow Render domain + any custom domain automatically
-ALLOWED_HOSTS = os.environ.get(
-    'ALLOWED_HOSTS',
-    'localhost,127.0.0.1'
-).split(',') + ['event-backend-5-v9tx.onrender.com']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'event-backend-5-v9tx.onrender.com',
+    '.onrender.com',
+    '.vercel.app',
+    os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip(),
+]
+ALLOWED_HOSTS = [h for h in ALLOWED_HOSTS if h]  # remove empty strings
+
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -45,12 +75,15 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # allow all in dev, restrict in prod
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'https://event-bookings-eosin.vercel.app',
+    'https://event-booking-chi.vercel.app',
+    'https://event-backend-5-v9tx.onrender.com',
+    'https://*.vercel.app',
+]
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -158,7 +191,7 @@ PAYMONGO_SECRET_KEY = os.environ.get('PAYMONGO_SECRET_KEY', '')
 PAYMONGO_PUBLIC_KEY = os.environ.get('PAYMONGO_PUBLIC_KEY', '')
 
 # Frontend URL
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://event-bookings-eosin.vercel.app')
 
 # Cache — use database cache on Render (no Redis needed)
 CACHES = {
