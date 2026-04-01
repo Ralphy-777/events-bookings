@@ -189,6 +189,7 @@ GCASH_RECEIVER_NAME = os.environ.get('GCASH_RECEIVER_NAME', 'Liberato Villarojo'
 # PayMongo
 PAYMONGO_SECRET_KEY = os.environ.get('PAYMONGO_SECRET_KEY', '')
 PAYMONGO_PUBLIC_KEY = os.environ.get('PAYMONGO_PUBLIC_KEY', '')
+PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
 
 # Frontend URL
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://event-bookings-eosin.vercel.app')

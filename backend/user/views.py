@@ -274,10 +274,15 @@ def register(request):
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
-                fail_silently=True,
+                fail_silently=False,
             )
         except Exception as mail_err:
-            logger.warning('Registration email failed: %s', mail_err)
+            cache.delete(f'pending_reg_{email}')
+            logger.exception('Registration email failed for %s: %s', email, mail_err)
+            return Response(
+                {'message': 'We could not send the verification email. Please check the email service configuration and try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         return Response({
             'message': 'Registration successful. Check your email for the verification code.',
@@ -401,18 +406,25 @@ def resend_verification_code(request):
     pending['code'] = code
     cache.set(f'pending_reg_{email}', pending, timeout=900)
 
-    send_mail(
-        subject='Your EventPro Verification Code',
-        message=(
-            f'Hi {pending["first_name"]},\n\n'
-            f'Your new verification code is: {code}\n\n'
-            f'Enter this code in the app to activate your account.\n\n'
+    try:
+        send_mail(
+            subject='Your EventPro Verification Code',
+            message=(
+                f'Hi {pending["first_name"]},\n\n'
+                f'Your new verification code is: {code}\n\n'
+                f'Enter this code in the app to activate your account.\n\n'
             f'— EventPro Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[email],
-        fail_silently=True,
-    )
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except Exception as mail_err:
+        logger.exception('Resend verification email failed for %s: %s', email, mail_err)
+        return Response(
+            {'message': 'We could not resend the verification email. Please check the email service configuration and try again.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
     return Response({'message': 'A new verification code has been sent to your email.'})
 
 
@@ -1219,46 +1231,7 @@ def paymongo_webhook(request):
 @api_view(['POST'])
 @csrf_exempt
 def gcash_payment_notify(request):
-    """Handle GCash payment notification callback"""
-    try:
-        # Get notification data
-        data = request.POST.dict()
-        
-        # Verify signature
-        gcash = GCashPayment()
-        if not gcash.verify_payment(data.copy()):
-            return Response({'message': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Extract payment info
-        order_no = data.get('out_trade_no')
-        trade_status = data.get('trade_status')
-        
-        # Find booking by order number
-        # Extract booking_id from order_no (format: ORD{booking_id}{timestamp})
-        booking_id = int(order_no[3:order_no.index(order_no[3:].split(order_no[3])[0])])
-        
-        booking = Booking.objects.get(id=booking_id)
-        
-        if trade_status == 'TRADE_SUCCESS':
-            # Update booking payment status
-            booking.payment_status = 'paid'
-            booking.save()
-            
-            # Create payment record
-            Payment.objects.create(
-                booking=booking,
-                event_id=booking.id,
-                event_name=booking.event_type,
-                client_name=f"{booking.user.first_name} {booking.user.last_name}",
-                payment_method='GCash',
-                reference_number=order_no,
-                amount=booking.total_amount
-            )
-        
-        return Response({'success': True})
-        
-    except Exception as e:
-        return Response({'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response({'received': True})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
