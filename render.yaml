@@ -13,7 +13,11 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
       - key: FRONTEND_URL
-        value: "https://event-bookings-eosin.vercel.app"
+        value: "https://event-bookings-git-main-ralphy-777s-projects.vercel.app"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://event-bookings-git-main-ralphy-777s-projects.vercel.app,https://event-bookings-eosin.vercel.app,http://localhost:3000"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://event-bookings-git-main-ralphy-777s-projects.vercel.app,https://event-bookings-eosin.vercel.app,http://localhost:3000"
       - key: DATABASE_URL
         fromDatabase:
           name: eventpro-db

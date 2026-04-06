@@ -5,8 +5,21 @@ import { useRouter } from 'next/navigation';
 import { API_BASE } from '@/lib/api';
 
 const iStyle = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(14,165,233,0.2)' };
-const iCls = "w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm";
+const iCls = "w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm capitalize";
 const lCls = "block text-xs font-bold text-sky-400 uppercase tracking-widest mb-2";
+
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(90000) });
+      return res;
+    } catch (err) {
+      if (i === retries) throw err;
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+  throw new Error('Failed after retries');
+}
 
 export default function ClientRegister() {
   const router = useRouter();
@@ -41,22 +54,43 @@ export default function ClientRegister() {
     }, 1000);
   };
 
+  const getErrorMessage = async (res: Response, fallback: string) => {
+    try {
+      const data = await res.json();
+      return data.message || fallback;
+    } catch {
+      return `${fallback} (HTTP ${res.status})`;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/register/`, {
+      const res = await fetchWithRetry(`${API_BASE}/register/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ first_name: firstName, last_name: lastName, date_of_birth: dob, address, email, password }),
       });
+      if (!res.ok) { setError(await getErrorMessage(res, 'Registration failed')); return; }
       const data = await res.json();
-      if (res.ok && data.requires_verification) { setPendingEmail(email); setStep('verify'); startCooldown(); }
-      else { setError(data.message || 'Registration failed'); }
-    } catch { setError('Connection error - Make sure backend is running on port 8000'); }
-    finally { setLoading(false); }
+      if (data.requires_verification) {
+        setPendingEmail(email);
+        setStep('verify');
+        startCooldown();
+        if (data.already_pending) {
+          setResendMsg('A code was already sent to this email. Check your inbox or click Resend.');
+        }
+      } else {
+        setError(data.message || 'Registration failed');
+      }
+    } catch {
+      setError('Connection error. Please check your internet and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerify = async (e: React.FormEvent) => {
@@ -65,28 +99,42 @@ export default function ClientRegister() {
     if (code.length !== 6) { setError('Enter the 6-digit code'); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/verify-email/`, {
+      const res = await fetchWithRetry(`${API_BASE}/verify-email/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: pendingEmail, code }),
       });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Verification failed'));
+        return;
+      }
       const data = await res.json();
-      if (res.ok && data.access) { localStorage.setItem('clientToken', data.access); setStep('success'); setTimeout(() => router.push('/'), 2500); }
-      else { setError(data.message || 'Verification failed'); }
-    } catch { setError('Connection error - Make sure backend is running on port 8000'); }
-    finally { setLoading(false); }
+      if (data.access) {
+        localStorage.setItem('clientToken', data.access);
+        if (data.refresh) localStorage.setItem('clientRefresh', data.refresh);
+        setStep('success');
+        setTimeout(() => router.push('/'), 2500);
+      } else {
+        setError(data.message || 'Verification failed');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      setError(msg.includes('timeout') ? 'Server timeout. Please try again.' : `Connection error. ${msg}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResend = async () => {
     setResendMsg(''); setError(''); setResendLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/resend-verification-code/`, {
+      const res = await fetchWithRetry(`${API_BASE}/resend-verification-code/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: pendingEmail }),
       });
       const data = await res.json();
       setResendMsg(data.message); setCode(''); startCooldown();
-    } catch { setError('Connection error'); }
+    } catch { setError('Connection error. Please try again.'); }
     finally { setResendLoading(false); }
   };
 
@@ -147,7 +195,7 @@ export default function ClientRegister() {
             <form onSubmit={handleVerify} className="space-y-4">
               <div>
                 <label className={lCls}>Verification Code</label>
-                <input type="text" value={code} onChange={e => setCode(e.target.value)}
+                <input type="text" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
                   maxLength={6} required autoFocus
                   className="w-full px-4 py-4 rounded-xl text-center text-3xl tracking-[0.5em] font-black text-white outline-none focus:ring-2 focus:ring-sky-500"
                   style={iStyle} placeholder="000000" />
@@ -156,7 +204,12 @@ export default function ClientRegister() {
               {resendMsg && <div className="px-4 py-3 rounded-xl text-xs font-semibold" style={{ background: 'rgba(14,165,233,0.1)', border: '1px solid rgba(14,165,233,0.25)', color: '#7dd3fc' }}>{resendMsg}</div>}
               <button type="submit" disabled={loading} className={btnPrimary}
                 style={{ background: 'linear-gradient(135deg, #0ea5e9, #0369a1)', boxShadow: '0 4px 20px rgba(14,165,233,0.3)' }}>
-                {loading ? 'Verifying...' : 'Verify & Continue'}
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Verifying...
+                  </span>
+                ) : 'Verify & Continue'}
               </button>
               <button type="button" onClick={handleResend} disabled={resendCooldown > 0 || resendLoading}
                 className="w-full text-xs text-sky-400 hover:text-sky-300 disabled:text-slate-600 transition-colors">
@@ -164,7 +217,7 @@ export default function ClientRegister() {
               </button>
               <button type="button" onClick={() => { setStep('form'); setError(''); setCode(''); setResendMsg(''); }}
                 className="w-full text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                Back to registration
+                ← Back to registration
               </button>
             </form>
           </div>
@@ -196,22 +249,24 @@ export default function ClientRegister() {
 
           <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'First Name', value: firstName, setter: setFirstName, type: 'text', placeholder: 'John' },
-              { label: 'Last Name', value: lastName, setter: setLastName, type: 'text', placeholder: 'Doe' },
+              { label: 'First Name', value: firstName, setter: setFirstName, type: 'text', placeholder: 'First Name' },
+              { label: 'Last Name', value: lastName, setter: setLastName, type: 'text', placeholder: 'Last Name' },
               { label: 'Date of Birth', value: dob, setter: setDob, type: 'date', placeholder: '' },
-              { label: 'Email Address', value: email, setter: setEmail, type: 'email', placeholder: 'john@email.com' },
+              { label: 'Email Address', value: email, setter: setEmail, type: 'email', placeholder: 'Email Address' },
             ].map(f => (
               <div key={f.label}>
                 <label className={lCls}>{f.label}</label>
                 <input type={f.type} value={f.value} onChange={e => f.setter(e.target.value)} required
-                  placeholder={f.placeholder} className={iCls} style={f.type === 'date' ? { ...iStyle, colorScheme: 'dark' } : iStyle} />
+                  placeholder={f.placeholder} className={iCls}
+                  autoCapitalize={f.type === 'text' ? 'words' : 'off'}
+                  style={f.type === 'date' ? { ...iStyle, colorScheme: 'dark' } : iStyle} />
               </div>
             ))}
 
             <div className="col-span-1 sm:col-span-2">
               <label className={lCls}>Address</label>
               <input type="text" value={address} onChange={e => setAddress(e.target.value)} required
-                placeholder="Your full address" className={iCls} style={iStyle} />
+                placeholder="Your full address" className={iCls} style={iStyle} autoCapitalize="words" />
             </div>
 
             <div>
@@ -236,12 +291,10 @@ export default function ClientRegister() {
             <div className="col-span-1 sm:col-span-2">
               <button type="submit" disabled={loading} className={btnPrimary}
                 style={{ background: 'linear-gradient(135deg, #0ea5e9, #0369a1)', boxShadow: '0 4px 20px rgba(14,165,233,0.3)' }}>
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Creating Account...
-                  </span>
-                ) : 'Create Account'}
+                <span className="flex items-center justify-center gap-2">
+                  {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {loading ? 'Creating Account...' : 'Create Account'}
+                </span>
               </button>
             </div>
           </form>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_BASE } from '@/lib/api';
 
 export default function EventsAdd() {
   const [formData, setFormData] = useState({
@@ -28,7 +29,7 @@ export default function EventsAdd() {
 
     try {
       const token = localStorage.getItem('organizerToken');
-      const response = await fetch('https://event-backend-5-v9tx.onrender.com/api/events/', {
+      const response = await fetch(`${API_BASE.replace(/\/user$/, '')}/events/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

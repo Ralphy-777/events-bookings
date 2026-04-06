@@ -1,4 +1,23 @@
-export const API_BASE = 'http://localhost:8000/api/user';
+export const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE || '').trim().replace(/\/$/, '') ||
+  'https://event-backend-5-v9tx.onrender.com/api/user';
+
+export const APP_BASE =
+  typeof window === 'undefined'
+    ? 'https://event-bookings-git-main-ralphy-777s-projects.vercel.app'
+    : window.location.origin;
+
+export const WS_BASE = API_BASE
+  .replace(/\/api\/user$/, '')
+  .replace(/^http:\/\//, 'ws://')
+  .replace(/^https:\/\//, 'wss://');
+
+// Keep Render backend alive — ping every 10 minutes to prevent spin-down
+if (typeof window !== 'undefined') {
+  const ping = () => fetch(`${API_BASE}/event-types/`).catch(() => {});
+  ping();
+  setInterval(ping, 10 * 60 * 1000);
+}
 
 async function refreshAccessToken(tokenKey: 'clientToken' | 'organizerToken'): Promise<string | null> {
   const refreshKey = tokenKey === 'clientToken' ? 'clientRefresh' : 'organizerRefresh';
@@ -22,7 +41,7 @@ export async function apiFetch(
   options: RequestInit = {},
   tokenKey: 'clientToken' | 'organizerToken' = 'clientToken'
 ): Promise<Response> {
-  let token = localStorage.getItem(tokenKey);
+  const token = localStorage.getItem(tokenKey);
   const headers = { ...(options.headers || {}), Authorization: `Bearer ${token}` } as Record<string, string>;
   if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_BASE } from '@/lib/api';
 
 export default function ClientLogin() {
   const [email, setEmail] = useState('');
@@ -16,7 +17,7 @@ export default function ClientLogin() {
     setLoading(true);
 
     try {
-      const response = await fetch('https://event-backend-5-v9tx.onrender.com/api/user/login/', {
+      const response = await fetch(`${API_BASE}/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
