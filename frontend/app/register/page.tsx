@@ -8,6 +8,8 @@ const iStyle = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(1
 const iCls = "w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm";
 const lCls = "block text-xs font-bold text-sky-400 uppercase tracking-widest mb-2";
 
+const capitalize = (s: string) => s.trim().replace(/\b\w/g, c => c.toUpperCase());
+
 async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
   for (let i = 0; i <= retries; i++) {
     try {
@@ -70,15 +72,11 @@ export default function ClientRegister() {
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     setLoading(true);
     setLoadingMsg('Creating Account...');
-
-    // Show "waking up server" message after 5s if still loading
-    const wakeTimer = setTimeout(() => setLoadingMsg('Waking up server, please wait...'), 5000);
-
     try {
       const res = await fetchWithRetry(`${API_BASE}/register/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ first_name: firstName, last_name: lastName, date_of_birth: dob, address, email, password }),
+        body: JSON.stringify({ first_name: capitalize(firstName), last_name: capitalize(lastName), date_of_birth: dob, address, email, password }),
       });
       if (!res.ok) {
         setError(await getErrorMessage(res, 'Registration failed'));
@@ -87,15 +85,9 @@ export default function ClientRegister() {
       const data = await res.json();
       if (data.requires_verification) { setPendingEmail(email); setStep('verify'); startCooldown(); }
       else { setError(data.message || 'Registration failed'); }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg.includes('timeout') || msg.includes('fetch') || msg.includes('network') || msg.toLowerCase().includes('failed')) {
-        setError('The server is starting up. Please wait 30 seconds and try again.');
-      } else {
-        setError(`Connection error. ${msg}`);
-      }
+    } catch {
+      setError('Connection error. Please check your internet and try again.');
     } finally {
-      clearTimeout(wakeTimer);
       setLoading(false);
       setLoadingMsg('Creating Account...');
     }
@@ -221,7 +213,7 @@ export default function ClientRegister() {
               </button>
               <button type="button" onClick={handleResend} disabled={resendCooldown > 0 || resendLoading}
                 className="w-full text-xs text-sky-400 hover:text-sky-300 disabled:text-slate-600 transition-colors">
-                {resendLoading ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Didn't receive a code? Resend"}
+                {resendLoading ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Didn’t receive a code? Resend"}
               </button>
               <button type="button" onClick={() => { setStep('form'); setError(''); setCode(''); setResendMsg(''); }}
                 className="w-full text-xs text-slate-500 hover:text-slate-300 transition-colors">
@@ -257,10 +249,10 @@ export default function ClientRegister() {
 
           <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'First Name', value: firstName, setter: setFirstName, type: 'text', placeholder: 'John' },
-              { label: 'Last Name', value: lastName, setter: setLastName, type: 'text', placeholder: 'Doe' },
-              { label: 'Date of Birth', value: dob, setter: setDob, type: 'date', placeholder: '' },
-              { label: 'Email Address', value: email, setter: setEmail, type: 'email', placeholder: 'john@email.com' },
+              { label: 'First Name', value: firstName, setter: (v: string) => setFirstName(capitalize(v)), type: 'text', placeholder: 'First Name' },
+              { label: 'Last Name', value: lastName, setter: (v: string) => setLastName(capitalize(v)), type: 'text', placeholder: 'Last Name' },
+              { label: 'Date of Birth', value: dob, setter: (v: string) => setDob(v), type: 'date', placeholder: '' },
+              { label: 'Email Address', value: email, setter: (v: string) => setEmail(v), type: 'email', placeholder: 'your@email.com' },
             ].map(f => (
               <div key={f.label}>
                 <label className={lCls}>{f.label}</label>

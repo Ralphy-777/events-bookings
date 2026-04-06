@@ -71,7 +71,6 @@ export default function SignIn() {
         return await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
       } catch (err) {
         if (i === retries) throw err;
-        setError('Server is waking up, retrying...');
         await new Promise(r => setTimeout(r, 3000));
       }
     }
@@ -134,13 +133,8 @@ export default function SignIn() {
           setError(data.message || `Invalid credentials. ${5 - newAttempts} attempt${5 - newAttempts !== 1 ? 's' : ''} remaining.`);
         }
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg.includes('timeout') || msg.includes('fetch') || msg.includes('Failed')) {
-        setError('Server is starting up. Please wait a moment and try again.');
-      } else {
-        setError('Connection error. Please check your internet and try again.');
-      }
+    } catch {
+      setError('Connection error. Please check your internet and try again.');
     } finally {
       setLoading(false);
     }
@@ -254,7 +248,7 @@ export default function SignIn() {
             </button>
           </div>
 
-          <p className="text-sm text-slate-400 mb-6">Enter your credentials — you'll be redirected automatically based on your role.</p>
+          <p className="text-sm text-slate-400 mb-6">Enter your credentials &mdash; you&apos;ll be redirected automatically based on your role.</p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -305,7 +299,7 @@ export default function SignIn() {
           </form>
 
           <div className="mt-6 pt-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-            <p className="text-sm text-slate-400 text-center mb-3">Don't have an account?</p>
+            <p className="text-sm text-slate-400 text-center mb-3">Don&apos;t have an account?</p>
             <button
               onClick={() => router.push('/register')}
               className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:-translate-y-0.5 active:scale-95 border"
@@ -325,7 +319,7 @@ export default function SignIn() {
             {forgotStep === 'email' && (
               <>
                 <h3 className="text-xl font-black text-white mb-1">Forgot Password</h3>
-                <p className="text-sm text-slate-400 mb-5">Enter your email and we'll send you a reset code.</p>
+                <p className="text-sm text-slate-400 mb-5">Enter your email and we&apos;ll send you a reset code.</p>
                 <label className="block text-sm font-semibold text-slate-300 mb-2">Email</label>
                 <input
                   type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
