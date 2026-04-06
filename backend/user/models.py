@@ -38,6 +38,7 @@ class EventType(models.Model):
     max_invited_emails = models.IntegerField(default=50)
     people_per_table = models.IntegerField(default=5)
     description = models.TextField(blank=True)
+    image = models.ImageField(upload_to='event_types/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -71,7 +72,7 @@ class Booking(models.Model):
     reminder_sent = models.BooleanField(default=False)
     decline_reason = models.TextField(blank=True, default='')
     cancel_reason = models.TextField(blank=True, default='')
-    special_requests = models.TextField(blank=True, default='')
+    special_requests = models.TextField(blank=True, null=True, default='')
     payment_deadline = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     

@@ -15,6 +15,7 @@ interface Event {
   time: string;
   location: string;
   status: string;
+  image?: string | null;
 }
 
 export default function EventsPage() {
@@ -31,7 +32,7 @@ export default function EventsPage() {
     setIsLoggedIn(!!localStorage.getItem('clientToken'));
     fetch(`${API_BASE}/event-types/`)
       .then(r => r.json())
-      .then(data => setEventTypeOptions(data.map((et: any) => et.event_type)))
+      .then(data => setEventTypeOptions(data.map((et: {event_type: string}) => et.event_type)))
       .catch(() => {});
     fetchEvents(filter);
   }, [filter]);
@@ -96,7 +97,7 @@ export default function EventsPage() {
         <div className="max-w-7xl mx-auto px-6 sm:px-8 py-10 relative z-10">
           <p className="text-xs font-bold text-sky-500 uppercase tracking-widest mb-2">Public Events</p>
           <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Confirmed Events</h1>
-          <p className="text-sky-400 text-sm mt-2">Discover amazing confirmed events happening at Ralphy's Venue</p>
+          <p className="text-sky-400 text-sm mt-2">Discover amazing confirmed events happening at Ralphy&apos;s Venue</p>
         </div>
       </div>
 
@@ -157,8 +158,13 @@ export default function EventsPage() {
                 className="rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
 
-                {/* Top accent */}
-                <div className="h-1" style={{ background: 'linear-gradient(90deg, #0ea5e9, #0369a1)' }} />
+                {/* Event image or gradient banner */}
+                {event.image ? (
+                  <img src={event.image} alt={event.event_type}
+                    className="w-full object-cover" style={{ height: '160px' }} />
+                ) : (
+                  <div className="h-2" style={{ background: 'linear-gradient(90deg, #0ea5e9, #0369a1)' }} />
+                )}
 
                 <div className="p-5">
                   {/* Header */}
@@ -186,7 +192,7 @@ export default function EventsPage() {
                       { label: 'Date', value: event.date },
                       { label: 'Time', value: event.time || 'TBA' },
                       { label: 'Capacity', value: `${event.capacity} guests` },
-                      { label: 'Venue', value: event.location || "Ralphy's Venue, Cebu City" },
+                      { label: 'Venue', value: event.location || "Ralphy&apos;s Venue, Cebu City" },
                     ].map(item => (
                       <div key={item.label} className="flex items-center justify-between px-3 py-2.5 rounded-xl"
                         style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -204,3 +210,4 @@ export default function EventsPage() {
     </div>
   );
 }
+

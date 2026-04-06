@@ -11,7 +11,7 @@ const VENUE_LOCATION = "Ralphy's Venue, Basak San Nicolas Villa Kalubihan Cebu C
 interface EventType {
   id: number; event_type: string; price: number;
   max_capacity: number; people_per_table: number; description: string;
-  max_invited_emails: number;
+  max_invited_emails: number; image: string | null;
 }
 
 const iStyle = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' };
@@ -381,8 +381,15 @@ export default function ClientDashboard() {
             {/* Package info */}
             {selectedEventType && (
               <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.2)' }}>
+                {selectedEventType.image && (
+                  <img src={selectedEventType.image} alt={selectedEventType.event_type}
+                    className="w-full object-cover" style={{ height: '180px' }} />
+                )}
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(14,165,233,0.15)' }}>
                   <h2 className="text-sm font-black text-sky-300">Package Info</h2>
+                  {selectedEventType.description && (
+                    <p className="text-xs text-slate-400 mt-1">{selectedEventType.description}</p>
+                  )}
                 </div>
                 <div className="p-5 grid grid-cols-2 gap-3">
                   {[

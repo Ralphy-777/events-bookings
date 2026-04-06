@@ -198,6 +198,7 @@ def get_event_types(request):
         'max_invited_emails': et.max_invited_emails,
         'people_per_table': et.people_per_table,
         'description': et.description,
+        'image': request.build_absolute_uri(et.image.url) if et.image else None,
     } for et in event_types]
     return Response(data)
 
@@ -246,7 +247,7 @@ def register(request):
             cache.delete(f'pending_reg_{email}')
             logger.exception('Registration email failed for %s: %s', email, mail_err)
             return Response(
-                {'message': 'We could not send the verification email. Please check the email service configuration and try again.'},
+                {'message': f'Could not send verification email: {mail_err}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -567,11 +568,11 @@ def create_booking(request):
         date = data.get('date')
         event_type = data.get('event_type')
         capacity = data.get('capacity')
-        description = data.get('description', '')
-        invited_emails = data.get('invited_emails', '')
-        payment_method = data.get('payment_method', '')
-        event_details = data.get('event_details', {})
-        special_requests = data.get('special_requests', '')
+        description = data.get('description') or ''
+        invited_emails = data.get('invited_emails') or ''
+        payment_method = data.get('payment_method') or ''
+        event_details = data.get('event_details') or {}
+        special_requests = data.get('special_requests') or ''
         whole_day = data.get('whole_day', False)
         if isinstance(whole_day, str):
             whole_day = whole_day.lower() == 'true'
