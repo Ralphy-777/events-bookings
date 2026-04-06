@@ -10,11 +10,11 @@ const VENUE_LOCATION = "Ralphy's Venue, Basak San Nicolas Villa Kalubihan Cebu C
 
 interface EventType {
   id: number; event_type: string; price: number;
-  max_capacity: number; max_invited_emails: number; people_per_table: number; description: string;
+  max_capacity: number; people_per_table: number; description: string;
 }
 
 const iStyle = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' };
-const iCls = "w-full h-12 px-4 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm capitalize";
+const iCls = "w-full h-12 px-4 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm";
 const lCls = "block text-xs font-bold text-sky-400 uppercase tracking-widest mb-2";
 
 export default function ClientDashboard() {
@@ -37,7 +37,6 @@ export default function ClientDashboard() {
   const [eventDetails, setEventDetails] = useState<Record<string, string>>({});
   const [sessionType, setSessionType] = useState<'half' | 'whole'>('half');
   const [invitedEmails, setInvitedEmails] = useState('');
-  const [specialRequests, setSpecialRequests] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('clientToken');
@@ -83,28 +82,11 @@ export default function ClientDashboard() {
       .catch(() => {}).finally(() => setLoading(false));
   }, [eventType, numPeopleInvited, date, router]);
 
-  const MAX_INVITE_EMAILS = selectedEventType?.max_invited_emails ?? 50;
-
-  // Count valid emails in the invited emails field
-  const invitedEmailCount = invitedEmails
-    ? invitedEmails.split(',').map(e => e.trim()).filter(e => e.length > 0).length
-    : 0;
-  const emailLimitExceeded = invitedEmailCount > MAX_INVITE_EMAILS;
-
   const handleBookingRequest = async () => {
-    // Validate required fields (special requests and guest emails are optional)
-    const fields = getEventFields();
-    for (const f of fields) {
-      const val = (eventDetails[f.key] || '').toString().trim();
-      if (!val) {
-        alert(`Please fill in: ${f.label}`); return;
-      }
-    }
     if (!eventType || !description || !numPeopleInvited || !date || (!wholeDay && !time) || !paymentMethod) {
       alert('Please fill in all required fields'); return;
     }
     if (description.length < 10) { setDescriptionError('Description must be at least 10 characters'); return; }
-    if (emailLimitExceeded) { alert(`You can only invite up to ${MAX_INVITE_EMAILS} guests by email.`); return; }
     setSubmitting(true);
     const token = localStorage.getItem('clientToken');
     if (!token) { alert('Session expired.'); router.push('/signin'); return; }
@@ -112,7 +94,7 @@ export default function ClientDashboard() {
       const res = await fetch(`${API_BASE}/bookings/create/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ event_type: eventType, description, capacity: numPeopleInvited, date, time: wholeDay ? '09:00' : time, whole_day: wholeDay, time_slot: timeSlot, invited_emails: invitedEmails, payment_method: paymentMethod, event_details: eventDetails, special_requests: specialRequests }),
+        body: JSON.stringify({ event_type: eventType, description, capacity: numPeopleInvited, date, time: wholeDay ? '09:00' : time, whole_day: wholeDay, time_slot: timeSlot, invited_emails: invitedEmails, payment_method: paymentMethod, event_details: eventDetails }),
       });
       if (res.status === 401) { localStorage.removeItem('clientToken'); router.push('/signin'); return; }
       if (!res.ok) { const e = await res.json(); alert(e.message || 'Failed to create booking'); setSubmitting(false); return; }
@@ -140,32 +122,32 @@ export default function ClientDashboard() {
 
     // Base fields every event gets
     const base = [
-      { key: 'first_name', label: 'First Name', placeholder: 'First Name', type: 'text' },
-      { key: 'last_name', label: 'Last Name', placeholder: 'Last Name', type: 'text' },
+      { key: 'first_name', label: 'First Name', placeholder: 'e.g. Ralph', type: 'text' },
+      { key: 'last_name', label: 'Last Name', placeholder: 'e.g. Villarojo', type: 'text' },
     ];
 
     // Extra fields for specific event types
     if (et.includes('birthday')) return [
-      { key: 'celebrant_first_name', label: "Celebrant's First Name", placeholder: 'First Name', type: 'text' },
-      { key: 'celebrant_last_name', label: "Celebrant's Last Name", placeholder: 'Last Name', type: 'text' },
-      { key: 'celebrant_age', label: 'Age', placeholder: 'Age', type: 'number' },
+      { key: 'celebrant_first_name', label: "Celebrant's First Name", placeholder: 'e.g. Ralph', type: 'text' },
+      { key: 'celebrant_last_name', label: "Celebrant's Last Name", placeholder: 'e.g. Villarojo', type: 'text' },
+      { key: 'celebrant_age', label: 'Age', placeholder: 'e.g. 18', type: 'number' },
     ];
     if (et.includes('wedding')) return [
-      { key: 'bride_first_name', label: "Bride's First Name", placeholder: 'First Name', type: 'text' },
-      { key: 'bride_last_name', label: "Bride's Last Name", placeholder: 'Last Name', type: 'text' },
-      { key: 'groom_first_name', label: "Groom's First Name", placeholder: 'First Name', type: 'text' },
-      { key: 'groom_last_name', label: "Groom's Last Name", placeholder: 'Last Name', type: 'text' },
+      { key: 'bride_first_name', label: "Bride's First Name", placeholder: 'e.g. Sandra', type: 'text' },
+      { key: 'bride_last_name', label: "Bride's Last Name", placeholder: 'e.g. Villarojo', type: 'text' },
+      { key: 'groom_first_name', label: "Groom's First Name", placeholder: 'e.g. Ralph', type: 'text' },
+      { key: 'groom_last_name', label: "Groom's Last Name", placeholder: 'e.g. Villarojo', type: 'text' },
     ];
     if (et.includes('christening')) return [
-      { key: 'child_first_name', label: "Child's First Name", placeholder: 'First Name', type: 'text' },
-      { key: 'child_last_name', label: "Child's Last Name", placeholder: 'Last Name', type: 'text' },
-      { key: 'parent_first_name', label: "Parent's First Name", placeholder: 'First Name', type: 'text' },
-      { key: 'parent_last_name', label: "Parent's Last Name", placeholder: 'Last Name', type: 'text' },
+      { key: 'child_first_name', label: "Child's First Name", placeholder: 'e.g. Ralph', type: 'text' },
+      { key: 'child_last_name', label: "Child's Last Name", placeholder: 'e.g. Villarojo', type: 'text' },
+      { key: 'parent_first_name', label: "Parent's First Name", placeholder: 'e.g. Sandra', type: 'text' },
+      { key: 'parent_last_name', label: "Parent's Last Name", placeholder: 'e.g. Villarojo', type: 'text' },
     ];
     if (et.includes('corporate')) return [
-      { key: 'company_name', label: 'Company Name', placeholder: 'Company Name', type: 'text' },
-      { key: 'contact_first_name', label: 'Contact First Name', placeholder: 'First Name', type: 'text' },
-      { key: 'contact_last_name', label: 'Contact Last Name', placeholder: 'Last Name', type: 'text' },
+      { key: 'company_name', label: 'Company Name', placeholder: 'e.g. Villarojo Corp', type: 'text' },
+      { key: 'contact_first_name', label: 'Contact First Name', placeholder: 'e.g. Ralph', type: 'text' },
+      { key: 'contact_last_name', label: 'Contact Last Name', placeholder: 'e.g. Villarojo', type: 'text' },
     ];
 
     // Any other new event type automatically gets First Name + Last Name
@@ -233,52 +215,34 @@ export default function ClientDashboard() {
 
                 {selectedEventType && getEventFields().map(f => (
                   <div key={f.key}>
-                    <label className={lCls}>{f.label} <span className="text-red-400">*</span></label>
+                    <label className={lCls}>{f.label}</label>
                     <input type={f.type} value={eventDetails[f.key] || ''}
                       onChange={e => setEventDetails(prev => ({ ...prev, [f.key]: e.target.value }))}
-                      placeholder={f.placeholder} className={iCls} style={iStyle}
-                      autoCapitalize={f.type === 'text' ? 'words' : 'off'} />
+                      placeholder={f.placeholder} className={iCls} style={iStyle} />
                   </div>
                 ))}
 
                 <div>
-                  <label className={lCls}>Event Description <span className="text-red-400">*</span></label>
+                  <label className={lCls}>Event Description</label>
                   <textarea value={description} onChange={e => setDescription(e.target.value)}
-                    placeholder="Describe your event — theme, purpose, occasion details..."
+                    placeholder="Describe your event — theme, purpose, special requests..."
                     rows={3} className="w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none text-sm"
                     style={iStyle} />
                   {descriptionError && <p className="mt-1 text-xs text-red-400">{descriptionError}</p>}
                 </div>
 
                 <div>
-                  <label className={lCls}>Special Requests <span className="text-slate-500 normal-case font-normal">(optional)</span></label>
-                  <textarea value={specialRequests} onChange={e => setSpecialRequests(e.target.value)}
-                    placeholder="e.g. Wheelchair access, halal food, specific decorations, sound system..."
-                    rows={3} className="w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none text-sm"
-                    style={iStyle} />
-                  <p className="text-xs text-slate-500 mt-1">Any special arrangements or requirements for your event.</p>
+                  <label className={lCls}>Guest Email Invitations <span className="text-slate-500 normal-case font-normal">(optional)</span></label>
+                  <textarea
+                    value={invitedEmails}
+                    onChange={e => setInvitedEmails(e.target.value)}
+                    placeholder="Enter guest emails separated by commas&#10;e.g. friend1@gmail.com, friend2@gmail.com"
+                    rows={3}
+                    className="w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none text-sm"
+                    style={iStyle}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Each guest will receive an invitation email when you book, and a confirmation email when approved.</p>
                 </div>
-
-                  <div>
-                    <label className={lCls}>Guest Email Invitations <span className="text-slate-500 normal-case font-normal">(optional)</span></label>
-                    <textarea
-                      value={invitedEmails}
-                      onChange={e => setInvitedEmails(e.target.value)}
-                      placeholder="Enter guest emails separated by commas&#10;e.g. friend1@gmail.com, friend2@gmail.com"
-                      rows={3}
-                      className={`w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all resize-none text-sm ${emailLimitExceeded ? 'focus:ring-red-500 ring-2 ring-red-500' : 'focus:ring-sky-500'}`}
-                      style={{ ...iStyle, border: emailLimitExceeded ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.12)' }}
-                    />
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="text-xs text-slate-500">Each guest will receive an invitation email when you book. {selectedEventType ? `Max ${MAX_INVITE_EMAILS} for ${selectedEventType.event_type}.` : ''}</p>
-                      <p className={`text-xs font-bold ${emailLimitExceeded ? 'text-red-400' : invitedEmailCount >= MAX_INVITE_EMAILS - 2 ? 'text-yellow-400' : 'text-slate-500'}`}>
-                        {invitedEmailCount}/{MAX_INVITE_EMAILS}
-                      </p>
-                    </div>
-                    {emailLimitExceeded && (
-                      <p className="text-xs text-red-400 mt-1">Maximum {MAX_INVITE_EMAILS} email invitations allowed for {selectedEventType?.event_type}. Please remove {invitedEmailCount - MAX_INVITE_EMAILS} email(s).</p>
-                    )}
-                  </div>
 
                 <div>
                   <label className={lCls}>Number of Guests</label>

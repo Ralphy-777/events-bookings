@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation';
 import { API_BASE } from '@/lib/api';
 
 const iStyle = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(14,165,233,0.2)' };
-const iCls = "w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm capitalize";
+const iCls = "w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm";
 const lCls = "block text-xs font-bold text-sky-400 uppercase tracking-widest mb-2";
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
   for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(90000) });
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
       return res;
     } catch (err) {
       if (i === retries) throw err;
-      await new Promise(r => setTimeout(r, 5000));
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
   throw new Error('Failed after retries');
@@ -32,6 +32,7 @@ export default function ClientRegister() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('Creating Account...');
   const [step, setStep] = useState<'form' | 'verify' | 'success'>('form');
   const [pendingEmail, setPendingEmail] = useState('');
   const [code, setCode] = useState('');
@@ -68,28 +69,35 @@ export default function ClientRegister() {
     setError('');
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     setLoading(true);
+    setLoadingMsg('Creating Account...');
+
+    // Show "waking up server" message after 5s if still loading
+    const wakeTimer = setTimeout(() => setLoadingMsg('Waking up server, please wait...'), 5000);
+
     try {
       const res = await fetchWithRetry(`${API_BASE}/register/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ first_name: firstName, last_name: lastName, date_of_birth: dob, address, email, password }),
       });
-      if (!res.ok) { setError(await getErrorMessage(res, 'Registration failed')); return; }
-      const data = await res.json();
-      if (data.requires_verification) {
-        setPendingEmail(email);
-        setStep('verify');
-        startCooldown();
-        if (data.already_pending) {
-          setResendMsg('A code was already sent to this email. Check your inbox or click Resend.');
-        }
-      } else {
-        setError(data.message || 'Registration failed');
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Registration failed'));
+        return;
       }
-    } catch {
-      setError('Connection error. Please check your internet and try again.');
+      const data = await res.json();
+      if (data.requires_verification) { setPendingEmail(email); setStep('verify'); startCooldown(); }
+      else { setError(data.message || 'Registration failed'); }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('timeout') || msg.includes('fetch') || msg.includes('network') || msg.toLowerCase().includes('failed')) {
+        setError('The server is starting up. Please wait 30 seconds and try again.');
+      } else {
+        setError(`Connection error. ${msg}`);
+      }
     } finally {
+      clearTimeout(wakeTimer);
       setLoading(false);
+      setLoadingMsg('Creating Account...');
     }
   };
 
@@ -249,24 +257,22 @@ export default function ClientRegister() {
 
           <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'First Name', value: firstName, setter: setFirstName, type: 'text', placeholder: 'First Name' },
-              { label: 'Last Name', value: lastName, setter: setLastName, type: 'text', placeholder: 'Last Name' },
+              { label: 'First Name', value: firstName, setter: setFirstName, type: 'text', placeholder: 'John' },
+              { label: 'Last Name', value: lastName, setter: setLastName, type: 'text', placeholder: 'Doe' },
               { label: 'Date of Birth', value: dob, setter: setDob, type: 'date', placeholder: '' },
-              { label: 'Email Address', value: email, setter: setEmail, type: 'email', placeholder: 'Email Address' },
+              { label: 'Email Address', value: email, setter: setEmail, type: 'email', placeholder: 'john@email.com' },
             ].map(f => (
               <div key={f.label}>
                 <label className={lCls}>{f.label}</label>
                 <input type={f.type} value={f.value} onChange={e => f.setter(e.target.value)} required
-                  placeholder={f.placeholder} className={iCls}
-                  autoCapitalize={f.type === 'text' ? 'words' : 'off'}
-                  style={f.type === 'date' ? { ...iStyle, colorScheme: 'dark' } : iStyle} />
+                  placeholder={f.placeholder} className={iCls} style={f.type === 'date' ? { ...iStyle, colorScheme: 'dark' } : iStyle} />
               </div>
             ))}
 
             <div className="col-span-1 sm:col-span-2">
               <label className={lCls}>Address</label>
               <input type="text" value={address} onChange={e => setAddress(e.target.value)} required
-                placeholder="Your full address" className={iCls} style={iStyle} autoCapitalize="words" />
+                placeholder="Your full address" className={iCls} style={iStyle} />
             </div>
 
             <div>
@@ -293,7 +299,7 @@ export default function ClientRegister() {
                 style={{ background: 'linear-gradient(135deg, #0ea5e9, #0369a1)', boxShadow: '0 4px 20px rgba(14,165,233,0.3)' }}>
                 <span className="flex items-center justify-center gap-2">
                   {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                  {loading ? 'Creating Account...' : 'Create Account'}
+                  {loading ? loadingMsg : 'Create Account'}
                 </span>
               </button>
             </div>
