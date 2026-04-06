@@ -1,85 +1,41 @@
-"""HTML email helpers for EventPro."""
-from django.core.mail import EmailMultiAlternatives
-from django.conf import settings
+"""HTML email helpers for EventPro — sends via Django SMTP."""
 import threading
 import logging
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
 
 logger = logging.getLogger(__name__)
 
-_BASE = """
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a1628;font-family:Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a1628;padding:40px 20px;">
-  <tr><td align="center">
-    <table width="100%" style="max-width:560px;background:#0d1f35;border-radius:16px;border:1px solid rgba(14,165,233,0.2);overflow:hidden;">
-      <!-- Header -->
-      <tr><td style="background:linear-gradient(135deg,#0ea5e9,#0369a1);padding:28px 32px;">
-        <table width="100%"><tr>
-          <td><span style="display:inline-block;width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:8px;text-align:center;line-height:36px;font-weight:900;color:#fff;font-size:18px;margin-right:10px;">E</span>
-          <span style="color:#fff;font-size:20px;font-weight:900;vertical-align:middle;">EventPro</span></td>
-        </tr></table>
-      </td></tr>
-      <!-- Body -->
-      <tr><td style="padding:32px;">
-        {body}
-      </td></tr>
-      <!-- Footer -->
-      <tr><td style="padding:20px 32px;border-top:1px solid rgba(14,165,233,0.1);text-align:center;">
-        <p style="color:#475569;font-size:12px;margin:0;">© EventPro · Ralphy's Venue, Cebu City</p>
-      </td></tr>
-    </table>
-  </td></tr>
-</table>
-</body></html>
-"""
-
-def _h1(text):
-    return f'<h1 style="color:#fff;font-size:22px;font-weight:900;margin:0 0 8px;">{text}</h1>'
-
-def _p(text, color='#94a3b8'):
-    return f'<p style="color:{color};font-size:14px;line-height:1.6;margin:0 0 16px;">{text}</p>'
-
-def _code_box(code):
-    return f'''
-<div style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.3);border-radius:12px;padding:24px;text-align:center;margin:20px 0;">
-  <p style="color:#94a3b8;font-size:12px;margin:0 0 8px;text-transform:uppercase;letter-spacing:2px;">Your Verification Code</p>
-  <span style="color:#0ea5e9;font-size:40px;font-weight:900;letter-spacing:12px;">{code}</span>
-  <p style="color:#64748b;font-size:12px;margin:8px 0 0;">Valid for 15 minutes</p>
-</div>'''
-
-def _detail_row(label, value):
-    return f'''
-<tr>
-  <td style="padding:8px 0;color:#64748b;font-size:13px;width:120px;">{label}</td>
-  <td style="padding:8px 0;color:#e2e8f0;font-size:13px;font-weight:600;">{value}</td>
-</tr>'''
-
-def _detail_table(rows_html):
-    return f'<table width="100%" style="background:rgba(255,255,255,0.04);border-radius:10px;padding:16px;margin:16px 0;">{rows_html}</table>'
-
-def _badge(text, color='#0ea5e9'):
-    return f'<span style="display:inline-block;background:{color}22;color:{color};border:1px solid {color}44;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;">{text}</span>'
 
 
-def send_html_email(subject, html_body, recipient_list, plain_text=None):
-    """Send an HTML email (with plain-text fallback) asynchronously."""
-    def _send():
-        try:
-            plain = plain_text or 'Please view this email in an HTML-capable client.'
-            html = _BASE.replace('{body}', html_body)
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=plain,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=recipient_list,
-            )
-            msg.attach_alternative(html, 'text/html')
-            msg.send(fail_silently=False)
-        except Exception as e:
-            logger.error('send_html_email failed to %s: %s', recipient_list, e)
-    threading.Thread(target=_send, daemon=True).start()
+def _send_via_django_email(recipient: str, subject: str, text_body: str, html_body: str):
+    """Send directly via Django's configured SMTP backend."""
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient],
+    )
+    message.attach_alternative(html_body, 'text/html')
+    message.send(fail_silently=False)
+
+
+def send_html_email(subject, html_body, recipient_list, plain_text=None, sync=False):
+    """Send HTML email directly via Django SMTP — no bridge needed."""
+    plain = plain_text or 'Please view this email in an HTML-capable client.'
+
+    def _send_all():
+        for recipient in recipient_list:
+            try:
+                _send_via_django_email(recipient, subject, plain, html_body)
+            except Exception as e:
+                logger.error('Failed to send email to %s: %s', recipient, e)
+
+    if sync:
+        _send_all()
+    else:
+        threading.Thread(target=_send_all, daemon=True).start()
+
 
 
 # ── Email builders ────────────────────────────────────────────────────────────
@@ -91,11 +47,13 @@ def send_verification_email(email, first_name, code):
         _code_box(code) +
         _p("If you didn't create an account, you can safely ignore this email.", '#64748b')
     )
+    # sync=True so the register view can catch failures and return a proper error
     send_html_email(
         subject='Your EventPro Verification Code',
         html_body=body,
         recipient_list=[email],
         plain_text=f'Hi {first_name},\n\nYour verification code is: {code}\n\nValid for 15 minutes.\n\n— EventPro Team',
+        sync=True,
     )
 
 

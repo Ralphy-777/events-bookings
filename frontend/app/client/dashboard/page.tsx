@@ -11,11 +11,18 @@ const VENUE_LOCATION = "Ralphy's Venue, Basak San Nicolas Villa Kalubihan Cebu C
 interface EventType {
   id: number; event_type: string; price: number;
   max_capacity: number; people_per_table: number; description: string;
+  max_invited_emails: number;
 }
 
 const iStyle = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' };
 const iCls = "w-full h-12 px-4 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm";
 const lCls = "block text-xs font-bold text-sky-400 uppercase tracking-widest mb-2";
+
+const capitalizeWords = (value: string) =>
+  value.replace(/\b([a-z])/g, char => char.toUpperCase());
+
+const shouldCapitalizeEventField = (key: string) =>
+  key.includes('first_name') || key.includes('last_name');
 
 export default function ClientDashboard() {
   const router = useRouter();
@@ -37,6 +44,8 @@ export default function ClientDashboard() {
   const [eventDetails, setEventDetails] = useState<Record<string, string>>({});
   const [sessionType, setSessionType] = useState<'half' | 'whole'>('half');
   const [invitedEmails, setInvitedEmails] = useState('');
+  const [specialRequests, setSpecialRequests] = useState('');
+  const [emailsError, setEmailsError] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('clientToken');
@@ -66,7 +75,7 @@ export default function ClientDashboard() {
     ? wholeDay ? selectedEventType.price * 2 * 0.8 : selectedEventType.price : 0;
 
   useEffect(() => {
-    if (!eventType || !numPeopleInvited || !date) return;
+    if (!date) return;
     setLoading(true);
     const token = localStorage.getItem('clientToken');
     if (!token) { router.push('/signin'); return; }
@@ -87,14 +96,41 @@ export default function ClientDashboard() {
       alert('Please fill in all required fields'); return;
     }
     if (description.length < 10) { setDescriptionError('Description must be at least 10 characters'); return; }
+    // Validate invited emails count
+    if (invitedEmails.trim() && selectedEventType) {
+      const emailList = invitedEmails.split(',').map(e => e.trim()).filter(e => e);
+      if (emailList.length > selectedEventType.max_invited_emails) {
+        setEmailsError(`Max ${selectedEventType.max_invited_emails} guest emails allowed for ${selectedEventType.event_type}.`);
+        return;
+      }
+    }
     setSubmitting(true);
     const token = localStorage.getItem('clientToken');
     if (!token) { alert('Session expired.'); router.push('/signin'); return; }
     try {
+      const payload = {
+        event_type: eventType,
+        description: capitalizeWords(description ?? ''),
+        capacity: numPeopleInvited,
+        date,
+        time: wholeDay ? '09:00' : time,
+        whole_day: wholeDay,
+        time_slot: timeSlot,
+        invited_emails: invitedEmails ?? '',
+        payment_method: paymentMethod,
+        event_details: Object.fromEntries(
+          Object.entries(eventDetails ?? {}).map(([key, value]) => [
+            key,
+            shouldCapitalizeEventField(key) ? capitalizeWords(value) : value,
+          ])
+        ),
+        special_requests: capitalizeWords((specialRequests ?? '').trim()),
+      };
+
       const res = await fetch(`${API_BASE}/bookings/create/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ event_type: eventType, description, capacity: numPeopleInvited, date, time: wholeDay ? '09:00' : time, whole_day: wholeDay, time_slot: timeSlot, invited_emails: invitedEmails, payment_method: paymentMethod, event_details: eventDetails }),
+        body: JSON.stringify(payload),
       });
       if (res.status === 401) { localStorage.removeItem('clientToken'); router.push('/signin'); return; }
       if (!res.ok) { const e = await res.json(); alert(e.message || 'Failed to create booking'); setSubmitting(false); return; }
@@ -217,14 +253,17 @@ export default function ClientDashboard() {
                   <div key={f.key}>
                     <label className={lCls}>{f.label}</label>
                     <input type={f.type} value={eventDetails[f.key] || ''}
-                      onChange={e => setEventDetails(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      onChange={e => setEventDetails(prev => ({
+                        ...prev,
+                        [f.key]: shouldCapitalizeEventField(f.key) ? capitalizeWords(e.target.value) : e.target.value,
+                      }))}
                       placeholder={f.placeholder} className={iCls} style={iStyle} />
                   </div>
                 ))}
 
                 <div>
                   <label className={lCls}>Event Description</label>
-                  <textarea value={description} onChange={e => setDescription(e.target.value)}
+                  <textarea value={description} onChange={e => setDescription(capitalizeWords(e.target.value))}
                     placeholder="Describe your event — theme, purpose, special requests..."
                     rows={3} className="w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none text-sm"
                     style={iStyle} />
@@ -235,13 +274,24 @@ export default function ClientDashboard() {
                   <label className={lCls}>Guest Email Invitations <span className="text-slate-500 normal-case font-normal">(optional)</span></label>
                   <textarea
                     value={invitedEmails}
-                    onChange={e => setInvitedEmails(e.target.value)}
+                    onChange={e => { setInvitedEmails(e.target.value); setEmailsError(''); }}
                     placeholder="Enter guest emails separated by commas&#10;e.g. friend1@gmail.com, friend2@gmail.com"
                     rows={3}
                     className="w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none text-sm"
                     style={iStyle}
                   />
-                  <p className="text-xs text-slate-500 mt-1">Each guest will receive an invitation email when you book, and a confirmation email when approved.</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {selectedEventType ? `Max ${selectedEventType.max_invited_emails} guest emails for ${selectedEventType.event_type}.` : 'Each guest will receive an invitation email when you book.'}
+                  </p>
+                  {emailsError && <p className="mt-1 text-xs text-red-400">{emailsError}</p>}
+                </div>
+
+                <div>
+                  <label className={lCls}>Special Requests <span className="text-slate-500 normal-case font-normal">(optional)</span></label>
+                  <textarea value={specialRequests} onChange={e => setSpecialRequests(capitalizeWords(e.target.value))}
+                    placeholder="Any special arrangements, dietary needs, decorations, etc."
+                    rows={3} className="w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none text-sm"
+                    style={iStyle} />
                 </div>
 
                 <div>
