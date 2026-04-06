@@ -4,12 +4,9 @@ import { API_BASE } from '@/lib/api';
 
 export default function KeepAlive() {
   useEffect(() => {
-    // Ping immediately on load
-    fetch(`${API_BASE.replace('/api/user', '')}/health/`).catch(() => {});
-    // Then every 10 minutes
-    const id = setInterval(() => {
-      fetch(`${API_BASE.replace('/api/user', '')}/health/`).catch(() => {});
-    }, 10 * 60 * 1000);
+    const ping = () => fetch(`${API_BASE.replace('/api/user', '')}/health/`).catch(() => {});
+    ping();
+    const id = setInterval(ping, 4 * 60 * 1000); // every 4 minutes
     return () => clearInterval(id);
   }, []);
   return null;
