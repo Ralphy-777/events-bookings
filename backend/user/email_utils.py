@@ -140,6 +140,7 @@ def send_booking_confirmation_email(email, first_name, booking):
         _detail_row('Venue', booking.location) +
         _detail_row('Amount', f'₱{float(booking.total_amount):,.2f}') +
         _detail_row('Payment', booking.payment_method) +
+        (_detail_row('Special Requests', booking.special_requests) if booking.special_requests else '') +
         _detail_row('Status', _badge('Pending Review', '#f59e0b'))
     )
     body = (

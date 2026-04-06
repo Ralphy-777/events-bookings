@@ -195,6 +195,7 @@ def get_event_types(request):
         'event_type': et.event_type,
         'price': float(et.price),
         'max_capacity': et.max_capacity,
+        'max_invited_emails': et.max_invited_emails,
         'people_per_table': et.people_per_table,
         'description': et.description,
     } for et in event_types]
@@ -545,6 +546,7 @@ def get_my_bookings(request):
                 'payment_proof': str(b.payment_proof) if b.payment_proof else None,
                 'invited_emails': b.invited_emails,
                 'whole_day': b.whole_day,
+                'special_requests': b.special_requests,
                 'decline_reason': b.decline_reason or '',
                 'has_review': b.reviews.filter(user=request.user).exists(),
             }
@@ -569,12 +571,26 @@ def create_booking(request):
         invited_emails = data.get('invited_emails', '')
         payment_method = data.get('payment_method', '')
         event_details = data.get('event_details', {})
+        special_requests = data.get('special_requests', '')
         whole_day = data.get('whole_day', False)
         if isinstance(whole_day, str):
             whole_day = whole_day.lower() == 'true'
 
         if not payment_method:
             return Response({'message': 'Payment method is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate invited emails count against event type max
+        if invited_emails:
+            email_list = [e.strip() for e in invited_emails.replace(';', ',').split(',') if e.strip()]
+            try:
+                et_obj_check = EventType.objects.get(event_type=event_type, is_active=True)
+                if len(email_list) > et_obj_check.max_invited_emails:
+                    return Response(
+                        {'message': f'You can only invite up to {et_obj_check.max_invited_emails} guests by email for {event_type}.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except EventType.DoesNotExist:
+                pass
 
         # Slot-aware availability check
         raw_slot = data.get('time_slot', '')
@@ -622,6 +638,7 @@ def create_booking(request):
             location="Ralphy's Venue, Basak San Nicolas Villa Kalubihan Cebu City 6000.",
             invited_emails=invited_emails,
             event_details=event_details,
+            special_requests=special_requests,
             whole_day=whole_day,
             time_slot=time_slot,
             status='pending',
