@@ -164,17 +164,18 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(EventType)
 class EventTypeAdmin(admin.ModelAdmin):
-    list_display  = ['event_type', 'price_display', 'max_capacity', 'people_per_table', 'active_badge', 'updated_at']
+    list_display  = ['event_type', 'image_preview', 'price_display', 'max_capacity', 'people_per_table', 'active_badge', 'updated_at']
     list_editable = ['max_capacity', 'people_per_table']
     list_filter   = ['is_active']
     search_fields = ['event_type', 'description']
     ordering      = ['event_type']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'image_preview']
 
     fieldsets = (
-        ('Basic Info',       {'fields': ('event_type', 'description', 'is_active')}),
-        ('Pricing & Capacity', {'fields': ('price', 'max_capacity', 'people_per_table')}),
-        ('Timestamps',       {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+        ('Basic Info',         {'fields': ('event_type', 'description', 'is_active')}),
+        ('Image',              {'fields': ('image', 'image_preview')}),
+        ('Pricing & Capacity', {'fields': ('price', 'max_capacity', 'people_per_table', 'max_invited_emails')}),
+        ('Timestamps',         {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     def price_display(self, obj):
@@ -184,6 +185,12 @@ class EventTypeAdmin(admin.ModelAdmin):
     def active_badge(self, obj):
         return _badge('Active', '#10b981') if obj.is_active else _badge('Inactive', '#ef4444')
     active_badge.short_description = 'Status'
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" style="height:80px;border-radius:8px;object-fit:cover;" />', obj.image.url)
+        return '—'
+    image_preview.short_description = 'Preview'
 
 
 # ── Video ─────────────────────────────────────────────────────────────────────
