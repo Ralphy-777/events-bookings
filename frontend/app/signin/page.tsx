@@ -68,7 +68,7 @@ export default function SignIn() {
   const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
     for (let i = 0; i <= retries; i++) {
       try {
-        return await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
+        return await fetch(url, { ...options, signal: AbortSignal.timeout(90000) });
       } catch (err) {
         if (i === retries) throw err;
         await new Promise(r => setTimeout(r, 3000));
@@ -81,6 +81,7 @@ export default function SignIn() {
     e.preventDefault();
     if (isLocked) { setError(`Account locked. Try again in ${getRemainingTime()}`); return; }
     setError(''); setLoading(true);
+    const wakeTimer = setTimeout(() => setError('Server is waking up, please wait up to 60 seconds...'), 8000);
     try {
       const res = await fetchWithRetry(`${API_BASE}/login/`, {
         method: 'POST',
@@ -134,8 +135,9 @@ export default function SignIn() {
         }
       }
     } catch {
-      setError('Connection error. Please check your internet and try again.');
+      setError('Server is taking too long to respond. Please wait a moment and try again.');
     } finally {
+      clearTimeout(wakeTimer);
       setLoading(false);
     }
   };

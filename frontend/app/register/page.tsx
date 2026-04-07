@@ -13,7 +13,7 @@ const capitalize = (s: string) => s.trim().replace(/\b\w/g, c => c.toUpperCase()
 async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
   for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(90000) });
       return res;
     } catch (err) {
       if (i === retries) throw err;
@@ -72,6 +72,7 @@ export default function ClientRegister() {
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     setLoading(true);
     setLoadingMsg('Creating Account...');
+    const wakeTimer = setTimeout(() => setLoadingMsg('Server is waking up, please wait...'), 8000);
     try {
       const res = await fetchWithRetry(`${API_BASE}/register/`, {
         method: 'POST',
@@ -86,8 +87,9 @@ export default function ClientRegister() {
       if (data.requires_verification) { setPendingEmail(email); setStep('verify'); startCooldown(); }
       else { setError(data.message || 'Registration failed'); }
     } catch {
-      setError('Connection error. Please check your internet and try again.');
+      setError('Server is taking too long to respond. Please wait a moment and try again.');
     } finally {
+      clearTimeout(wakeTimer);
       setLoading(false);
       setLoadingMsg('Creating Account...');
     }
