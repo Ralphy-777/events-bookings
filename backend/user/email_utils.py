@@ -1,25 +1,64 @@
-"""Email helpers for EventPro — sends via Django SMTP."""
+"""Email helpers for EventPro — sends via Django SMTP with Nodemailer bridge fallback."""
 import threading
 import logging
+import requests as http_requests
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 
+def _send_via_smtp(subject, html_body, recipient, plain_text):
+    """Send via Django SMTP."""
+    try:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'EventPro <noreply@eventpro.com>')
+        msg = EmailMultiAlternatives(subject, plain_text, from_email, [recipient])
+        msg.attach_alternative(html_body, 'text/html')
+        msg.send()
+        logger.info('Email sent via SMTP to %s', recipient)
+        return True
+    except Exception as e:
+        logger.error('SMTP failed to %s: %s', recipient, e)
+        return False
+
+
+def _send_via_bridge(subject, html_body, recipient, plain_text):
+    """Send via Nodemailer bridge (Next.js API)."""
+    bridge_url = getattr(settings, 'EMAIL_BRIDGE_URL', '').rstrip('/')
+    bridge_secret = getattr(settings, 'EMAIL_BRIDGE_SECRET', '')
+    if not bridge_url or not bridge_secret:
+        return False
+    try:
+        resp = http_requests.post(
+            f'{bridge_url}/api/send-email',
+            json={
+                'recipient': recipient,
+                'subject': subject,
+                'htmlBody': html_body,
+                'textBody': plain_text,
+            },
+            headers={'x-email-bridge-secret': bridge_secret},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            logger.info('Email sent via bridge to %s', recipient)
+            return True
+        logger.warning('Bridge failed (%s): %s', resp.status_code, resp.text)
+        return False
+    except Exception as e:
+        logger.warning('Bridge error for %s: %s', recipient, e)
+        return False
+
+
 def send_html_email(subject, html_body, recipient_list, plain_text=None, sync=False):
-    """Send HTML email directly via Django SMTP."""
+    """Send HTML email — tries SMTP first, then bridge as fallback."""
     plain = plain_text or 'Please view this email in an HTML-capable client.'
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'EventPro <noreply@eventpro.com>')
 
     def _send_all():
         for recipient in recipient_list:
-            try:
-                msg = EmailMultiAlternatives(subject, plain, from_email, [recipient])
-                msg.attach_alternative(html_body, 'text/html')
-                msg.send()
-            except Exception as e:
-                logger.error('Failed to send email to %s: %s', recipient, e)
+            sent = _send_via_smtp(subject, html_body, recipient, plain)
+            if not sent:
+                _send_via_bridge(subject, html_body, recipient, plain)
 
     if sync:
         _send_all()
@@ -41,7 +80,7 @@ def send_verification_email(email, first_name, code):
         html_body=body,
         recipient_list=[email],
         plain_text=f'Hi {first_name},\n\nYour verification code is: {code}\n\nValid for 15 minutes.\n\n— EventPro Team',
-        sync=True,
+        sync=False,
     )
 
 
@@ -57,7 +96,7 @@ def send_password_reset_email(email, first_name, code):
         html_body=body,
         recipient_list=[email],
         plain_text=f'Hi {first_name},\n\nYour password reset code is: {code}\n\n— EventPro Team',
-        sync=True,
+        sync=False,
     )
 
 
@@ -73,7 +112,7 @@ def send_email_change_verification(email, first_name, new_email, code):
         html_body=body,
         recipient_list=[email],
         plain_text=f'Hi {first_name},\n\nYour email change verification code is: {code}\n\n— EventPro Team',
-        sync=True,
+        sync=False,
     )
 
 

@@ -510,21 +510,30 @@ def get_public_events(request):
 @permission_classes([IsAuthenticated])
 def get_bookings(request):
     bookings = Booking.objects.all()
-    data = [{
-        'id': b.id,
-        'user': f"{b.user.first_name} {b.user.last_name}",
-        'event_type': b.event_type,
-        'capacity': b.capacity,
-        'date': b.date,
-        'time': b.time,
-        'status': b.status,
-        'payment_status': b.payment_status,
-        'gcash_reference': b.gcash_reference or '',
-        'payment_proof': request.build_absolute_uri(b.payment_proof.url) if b.payment_proof else None,
-        'payment_method': b.payment_method,
-        'total_amount': float(b.total_amount),
-        'decline_reason': b.decline_reason or '',
-    } for b in bookings]
+    data = []
+    for b in bookings:
+        proof_url = None
+        if b.payment_proof:
+            try:
+                url = b.payment_proof.url
+                proof_url = url if url.startswith('http') else request.build_absolute_uri(url)
+            except Exception:
+                proof_url = str(b.payment_proof)
+        data.append({
+            'id': b.id,
+            'user': f"{b.user.first_name} {b.user.last_name}",
+            'event_type': b.event_type,
+            'capacity': b.capacity,
+            'date': b.date,
+            'time': b.time,
+            'status': b.status,
+            'payment_status': b.payment_status,
+            'gcash_reference': b.gcash_reference or '',
+            'payment_proof': proof_url,
+            'payment_method': b.payment_method,
+            'total_amount': float(b.total_amount),
+            'decline_reason': b.decline_reason or '',
+        })
     return Response(data)
 
 @api_view(['GET'])
@@ -1405,18 +1414,28 @@ def contact_form(request):
 def get_contact_messages(request):
     if not request.user.is_organizer:
         return Response({'message': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
-    messages = ContactMessage.objects.all()
-    return Response([{
-        'id': m.id,
-        'name': m.name,
-        'email': m.email,
-        'subject': m.subject,
-        'message': m.message,
-        'reply': m.reply,
-        'is_read': m.is_read,
-        'replied_at': m.replied_at.isoformat() if m.replied_at else None,
-        'created_at': m.created_at.isoformat(),
-    } for m in messages])
+    try:
+        contact_msgs = ContactMessage.objects.all()
+        data = []
+        for m in contact_msgs:
+            try:
+                data.append({
+                    'id': m.id,
+                    'name': m.name,
+                    'email': m.email,
+                    'subject': m.subject,
+                    'message': m.message,
+                    'reply': m.reply or '',
+                    'is_read': m.is_read,
+                    'replied_at': m.replied_at.isoformat() if m.replied_at else None,
+                    'created_at': m.created_at.isoformat(),
+                })
+            except Exception as e:
+                logger.error('get_contact_messages row error id=%s: %s', m.id, e)
+        return Response(data)
+    except Exception as e:
+        logger.exception('get_contact_messages error: %s', e)
+        return Response({'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])

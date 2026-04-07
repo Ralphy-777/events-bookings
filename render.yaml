@@ -13,9 +13,9 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
       - key: FRONTEND_URL
-        value: "https://events-booking-ivpa.vercel.app"
+        value: "https://eventpro-frontend-eight.vercel.app"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://events-booking-ivpa.vercel.app,https://events-booking-7udo.vercel.app,https://event-bookings-git-main-ralphy-777s-projects.vercel.app,https://event-bookings-eosin.vercel.app,https://event-booking-chi.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+        value: "https://eventpro-frontend-eight.vercel.app,https://events-booking-7udo.vercel.app,https://event-bookings-git-main-ralphy-777s-projects.vercel.app,https://event-bookings-eosin.vercel.app,https://event-booking-chi.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
       - key: CSRF_TRUSTED_ORIGINS
         value: "https://events-booking-ivpa.vercel.app,https://events-booking-7udo.vercel.app,https://event-bookings-git-main-ralphy-777s-projects.vercel.app,https://event-bookings-eosin.vercel.app,https://event-booking-chi.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
       - key: DATABASE_URL
