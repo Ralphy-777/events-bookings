@@ -173,7 +173,7 @@ class EventTypeAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Basic Info',         {'fields': ('event_type', 'description', 'is_active')}),
-        ('Image',              {'fields': ('image', 'image_preview')}),
+        ('Image',              {'fields': ('image_url', 'image', 'image_preview'), 'description': '💡 On Render: paste an image URL. Uploading a file also works but may reset on redeploy.'}),
         ('Pricing & Capacity', {'fields': ('price', 'max_capacity', 'people_per_table', 'max_invited_emails')}),
         ('Timestamps',         {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
@@ -187,9 +187,10 @@ class EventTypeAdmin(admin.ModelAdmin):
     active_badge.short_description = 'Status'
 
     def image_preview(self, obj):
-        if obj.image:
-            return format_html('<img src="{}" style="height:80px;border-radius:8px;object-fit:cover;" />', obj.image.url)
-        return '—'
+        url = obj.get_image()
+        if url:
+            return format_html('<img src="{}" style="height:80px;border-radius:8px;object-fit:cover;" />', url)
+        return '— No image yet'
     image_preview.short_description = 'Preview'
 
 
@@ -197,18 +198,18 @@ class EventTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
-    list_display  = ['title', 'category', 'order', 'active_badge', 'created_at']
+    list_display  = ['title', 'event_type', 'order', 'active_badge', 'created_at']
     list_editable = ['order']
-    list_filter   = ['is_active', 'category']
+    list_filter   = ['is_active', 'event_type']
     search_fields = ['title', 'description']
     ordering      = ['order', '-created_at']
     readonly_fields = ['created_at', 'updated_at']
 
     fieldsets = (
-        ('Video Info',      {'fields': ('title', 'description', 'category')}),
-        ('URLs',            {'fields': ('video_url', 'thumbnail_url'), 'description': 'Paste a YouTube URL e.g. https://www.youtube.com/watch?v=VIDEO_ID'}),
-        ('Display',         {'fields': ('order', 'is_active')}),
-        ('Timestamps',      {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+        ('Video Info',  {'fields': ('title', 'description', 'event_type')}),
+        ('URLs',        {'fields': ('video_url', 'thumbnail_url'), 'description': 'Paste a YouTube URL e.g. https://www.youtube.com/watch?v=VIDEO_ID'}),
+        ('Display',     {'fields': ('order', 'is_active')}),
+        ('Timestamps',  {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     def active_badge(self, obj):

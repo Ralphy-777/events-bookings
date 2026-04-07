@@ -198,7 +198,7 @@ def get_event_types(request):
         'max_invited_emails': et.max_invited_emails,
         'people_per_table': et.people_per_table,
         'description': et.description,
-        'image': request.build_absolute_uri(et.image.url) if et.image else None,
+        'image': et.get_image(),
     } for et in event_types]
     return Response(data)
 
@@ -211,7 +211,7 @@ def get_videos(request):
         'video_url': v.get_youtube_embed_url(),
         'thumbnail_url': v.thumbnail_url,
         'description': v.description,
-        'category': v.category,
+        'category': v.event_type.event_type if v.event_type else 'Other',
         'order': v.order
     } for v in videos]
     return Response(data)
