@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
 from .models import (
     User, Booking, Payment, EventType,
-    Review, ReviewReply, Notification, ContactMessage,
+    Review, ReviewReply, Notification, ContactMessage, GalleryVideo,
 )
 
 # organizer_site kept for backward compat with urls.py import
@@ -271,3 +271,24 @@ class ContactMessageAdmin(admin.ModelAdmin):
     def replied_badge(self, obj):
         return _badge('Replied', '#10b981') if obj.reply else _badge('Pending', '#94a3b8')
     replied_badge.short_description = 'Reply'
+
+
+@admin.register(GalleryVideo)
+class GalleryVideoAdmin(admin.ModelAdmin):
+    list_display  = ['title', 'category', 'order', 'active_badge', 'created_at']
+    list_editable = ['order']
+    list_filter   = ['is_active']
+    search_fields = ['title', 'description', 'category']
+    ordering      = ['order', '-created_at']
+    readonly_fields = ['created_at']
+
+    fieldsets = (
+        ('Video Info', {'fields': ('title', 'description', 'category')}),
+        ('Files',      {'fields': ('video_file', 'thumbnail')}),
+        ('Display',    {'fields': ('order', 'is_active')}),
+        ('Timestamps', {'fields': ('created_at',), 'classes': ('collapse',)}),
+    )
+
+    def active_badge(self, obj):
+        return _badge('Active', '#10b981') if obj.is_active else _badge('Inactive', '#ef4444')
+    active_badge.short_description = 'Status'
