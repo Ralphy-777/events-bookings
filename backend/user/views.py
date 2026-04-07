@@ -188,23 +188,8 @@ def _send_invitation_emails(booking, confirmed=False):
 
 
 @api_view(['GET'])
-def get_event_types(request):
-    event_types = EventType.objects.filter(is_active=True)
-    data = [{
-        'id': et.id,
-        'event_type': et.event_type,
-        'price': float(et.price),
-        'max_capacity': et.max_capacity,
-        'max_invited_emails': et.max_invited_emails,
-        'people_per_table': et.people_per_table,
-        'description': et.description,
-        'image': et.get_image(),
-    } for et in event_types]
-    return Response(data)
-
-@api_view(['GET'])
 def get_videos(request):
-    videos = Video.objects.filter(is_active=True)
+    videos = Video.objects.filter(is_active=True).select_related('event_type')
     data = [{
         'id': v.id,
         'title': v.title,
@@ -212,8 +197,34 @@ def get_videos(request):
         'thumbnail_url': v.thumbnail_url,
         'description': v.description,
         'category': v.event_type.event_type if v.event_type else 'Other',
-        'order': v.order
+        'order': v.order,
     } for v in videos]
+    return Response(data)
+
+
+@api_view(['GET'])
+def get_event_types(request):
+    event_types = EventType.objects.filter(is_active=True)
+    data = []
+    for et in event_types:
+        image = None
+        if et.image_url:
+            image = et.image_url
+        elif et.image:
+            try:
+                image = request.build_absolute_uri(et.image.url)
+            except Exception:
+                image = None
+        data.append({
+            'id': et.id,
+            'event_type': et.event_type,
+            'price': float(et.price),
+            'max_capacity': et.max_capacity,
+            'max_invited_emails': et.max_invited_emails,
+            'people_per_table': et.people_per_table,
+            'description': et.description,
+            'image': image,
+        })
     return Response(data)
 
 @api_view(['POST'])
