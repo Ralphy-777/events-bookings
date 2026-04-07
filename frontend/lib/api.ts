@@ -4,7 +4,7 @@ export const API_BASE =
 
 export const APP_BASE =
   typeof window === 'undefined'
-    ? 'https://events-booking-7udo.vercel.app'
+    ? 'https://events-booking-ivpa.vercel.app'
     : window.location.origin;
 
 export const WS_BASE = API_BASE
@@ -14,7 +14,7 @@ export const WS_BASE = API_BASE
 
 // Keep Render backend alive — ping every 4 minutes to prevent spin-down
 if (typeof window !== 'undefined') {
-  const BACKEND_ROOT = 'https://event-backend-5-v9tx.onrender.com';
+  const BACKEND_ROOT = API_BASE.replace(/\/api\/user$/, '');
   const ping = () => fetch(`${BACKEND_ROOT}/health/`).catch(() => {});
   ping();
   setInterval(ping, 4 * 60 * 1000);

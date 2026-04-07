@@ -10,13 +10,15 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "15.1.7",
+    "next": "15.3.9",
     "nodemailer": "^6.9.16",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "whitenoise": "^0.0.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.0",
@@ -24,7 +26,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.1.7",
+    "eslint-config-next": "15.3.9",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

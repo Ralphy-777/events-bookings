@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export function LogoutOverlay({ visible }: { visible: boolean }) {
   const [opacity, setOpacity] = useState(0);
@@ -62,7 +61,6 @@ export function LogoutOverlay({ visible }: { visible: boolean }) {
 }
 
 export function useLogout() {
-  const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
   const logout = (tokenKey: 'clientToken' | 'organizerToken' = 'clientToken', redirectTo = '/') => {
