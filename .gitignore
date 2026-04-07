@@ -19,6 +19,8 @@ node_modules/
 frontend/.next/
 frontend/npm-cache/
 backend/npm-cache/
+npm-cache/
+mobile/npm-cache/
 
 # Logs
 *.log

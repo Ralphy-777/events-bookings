@@ -4,6 +4,31 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def migrate_video_category_to_event_type(apps, schema_editor):
+    Video = apps.get_model('user', 'Video')
+    EventType = apps.get_model('user', 'EventType')
+
+    for video in Video.objects.all():
+        legacy_category = getattr(video, 'category', None)
+        if not legacy_category or legacy_category == 'Other':
+            continue
+
+        event_type = EventType.objects.filter(event_type__iexact=legacy_category).first()
+        if event_type is None:
+            event_type = EventType.objects.create(
+                event_type=legacy_category,
+                price=0,
+                max_capacity=50,
+                max_invited_emails=50,
+                people_per_table=5,
+                description='Auto-created from legacy video category during migration.',
+                is_active=True,
+            )
+
+        video.event_type = event_type
+        video.save(update_fields=['event_type'])
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,10 +36,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='video',
-            name='category',
-        ),
         migrations.AddField(
             model_name='eventtype',
             name='image_url',
@@ -24,5 +45,10 @@ class Migration(migrations.Migration):
             model_name='video',
             name='event_type',
             field=models.ForeignKey(blank=True, help_text='Select the event type this video belongs to', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='videos', to='user.eventtype'),
+        ),
+        migrations.RunPython(migrate_video_category_to_event_type, migrations.RunPython.noop),
+        migrations.RemoveField(
+            model_name='video',
+            name='category',
         ),
     ]

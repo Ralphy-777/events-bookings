@@ -6,17 +6,16 @@ import { LogoutOverlay, useLogout } from '@/components/LogoutOverlay';
 import { API_BASE } from '@/lib/api';
 import MobileNav from '@/components/MobileNav';
 
-interface Video {
-  id: number; title: string; video_url: string;
-  thumbnail_url: string; description: string; category: string; order: number;
+interface EventType {
+  id: number;
+  event_type: string;
+  description: string;
 }
 
-const EVENTS = [
-  { name: 'Weddings', desc: 'Elegant ceremonies & receptions' },
-  { name: 'Birthdays', desc: 'Memorable celebrations for all ages' },
-  { name: 'Corporate', desc: 'Professional meetings & conferences' },
-  { name: 'Others', desc: 'Custom events & special occasions' },
-];
+interface Review {
+  id: number;
+  rating: number;
+}
 
 const FEATURES = [
   { title: 'Easy Booking', desc: 'Book your event in minutes with our streamlined process.' },
@@ -26,26 +25,34 @@ const FEATURES = [
   { title: 'Verified Reviews', desc: 'Read honest reviews from real clients who\'ve hosted events.' },
 ];
 
-const STATS = [
-  { value: '500+', label: 'Events Hosted' },
-  { value: '5.0', label: 'Avg. Rating' },
-  { value: '5', label: 'Event Types' },
-  { value: '100%', label: 'Satisfaction' },
-];
-
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loadingVideos, setLoadingVideos] = useState(true);
+  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const { loggingOut, logout } = useLogout();
 
   useEffect(() => {
     setIsLoggedIn(!!localStorage.getItem('clientToken'));
-    fetch(`${API_BASE}/videos/`)
+    fetch(`${API_BASE}/event-types/`)
       .then(r => r.ok ? r.json() : [])
-      .then(setVideos).catch(() => {})
-      .finally(() => setLoadingVideos(false));
+      .then(data => setEventTypes(Array.isArray(data) ? data : []))
+      .catch(() => {});
+    fetch(`${API_BASE}/reviews/`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setReviews(Array.isArray(data) ? data : []))
+      .catch(() => {});
   }, []);
+
+  const averageRating = reviews.length > 0
+    ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
+    : '0.0';
+
+  const stats = [
+    { value: '500+', label: 'Events Hosted' },
+    { value: averageRating, label: 'Avg. Rating' },
+    { value: String(eventTypes.length), label: 'Event Types' },
+    { value: '100%', label: 'Satisfaction' },
+  ];
 
   const navLinks = isLoggedIn
     ? [
@@ -83,7 +90,7 @@ export default function Home() {
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-8"
             style={{ background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.3)', color: '#7dd3fc' }}>
             <span className="w-1.5 h-1.5 bg-sky-400 rounded-full" style={{ animation: 'pulse 2s infinite' }} />
-            Ralphy's Venue — Cebu City, Philippines
+            Ralphy&apos;s Venue — Cebu City, Philippines
           </div>
 
           <h1 className="text-5xl sm:text-7xl font-black text-white leading-[1.05] mb-6 tracking-tight">
@@ -113,7 +120,7 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
-            {STATS.map(s => (
+            {stats.map(s => (
               <div key={s.label} className="rounded-xl p-4 text-center"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <p className="text-2xl font-black text-white">{s.value}</p>
@@ -140,18 +147,21 @@ export default function Home() {
             <p className="text-slate-400 max-w-md mx-auto">From intimate gatherings to grand celebrations — we handle it all.</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {EVENTS.map((e, i) => (
-              <div key={e.name} className="rounded-2xl p-6 text-center transition-all duration-300 hover:-translate-y-1 cursor-default"
+            {eventTypes.map((e) => (
+              <div key={e.id} className="rounded-2xl p-6 text-center transition-all duration-300 hover:-translate-y-1 cursor-default"
                 style={{ background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.15)' }}>
                 <div className="w-12 h-12 rounded-xl mx-auto mb-4 flex items-center justify-center"
                   style={{ background: 'rgba(14,165,233,0.15)', border: '1px solid rgba(14,165,233,0.3)' }}>
                   <div className="w-3 h-3 rounded-full" style={{ background: '#0ea5e9' }} />
                 </div>
-                <p className="font-bold text-white text-sm mb-1">{e.name}</p>
-                <p className="text-xs text-slate-400">{e.desc}</p>
+                <p className="font-bold text-white text-sm mb-1">{e.event_type}</p>
+                <p className="text-xs text-slate-400">{e.description || 'Custom event planning tailored to your celebration.'}</p>
               </div>
             ))}
           </div>
+          {eventTypes.length === 0 && (
+            <p className="text-center text-sm text-slate-500 mt-6">No event types available yet.</p>
+          )}
         </div>
       </section>
 
@@ -163,9 +173,13 @@ export default function Home() {
             <h2 className="text-3xl sm:text-4xl font-black text-white mb-3">Everything You Need</h2>
             <p className="text-slate-400 max-w-md mx-auto">All the tools and features to make your event a success.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f, i) => (
-              <div key={f.title} className="rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
+          <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-5">
+            {FEATURES.map((f, index) => (
+              <div
+                key={f.title}
+                className={`rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 sm:col-span-1 lg:col-span-2 ${
+                  FEATURES.length % 3 === 2 && index >= FEATURES.length - 2 ? 'lg:col-span-3' : ''
+                }`}
                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
                 <div className="w-10 h-10 rounded-xl mb-4 flex items-center justify-center"
                   style={{ background: 'rgba(14,165,233,0.15)', border: '1px solid rgba(14,165,233,0.25)' }}>
@@ -179,48 +193,12 @@ export default function Home() {
         </div>
       </section>
 
-      {/* VIDEOS */}
-      <section className="py-20" style={{ background: '#0d1f35', borderTop: '1px solid rgba(14,165,233,0.1)' }}>
-        <div className="max-w-6xl mx-auto px-6 sm:px-8">
-          <div className="text-center mb-12">
-            <p className="text-xs font-bold text-sky-500 uppercase tracking-widest mb-3">See It Live</p>
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-3">Event Highlights</h2>
-            <p className="text-slate-400">Watch real events hosted at Ralphy's Venue</p>
-          </div>
-
-          {loadingVideos ? (
-            <div className="flex justify-center py-12">
-              <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : videos.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">No videos available yet.</div>
-          ) : (
-            <div className="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory" style={{ scrollbarWidth: 'none' }}>
-              {videos.map(v => (
-                <div key={v.id} className="flex-shrink-0 w-[85vw] sm:w-[340px] snap-center rounded-2xl overflow-hidden"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div className="aspect-video">
-                    <iframe src={v.video_url} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                  </div>
-                  <div className="p-4">
-                    <span className="text-xs font-bold px-2 py-1 rounded-full mb-2 inline-block"
-                      style={{ background: 'rgba(14,165,233,0.15)', color: '#7dd3fc' }}>{v.category}</span>
-                    <p className="font-bold text-white text-sm">{v.title}</p>
-                    {v.description && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{v.description}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* CTA */}
       <section className="py-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0c2d4a, #0a1628)' }}>
         <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle, #0ea5e9 1px, transparent 1px)', backgroundSize: '25px 25px' }} />
         <div className="max-w-3xl mx-auto px-6 sm:px-8 text-center relative z-10">
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-5 leading-tight">Ready to Create Your Dream Event?</h2>
-          <p className="text-slate-400 text-lg mb-10 max-w-xl mx-auto">Join hundreds of happy clients who've hosted unforgettable events at Ralphy's Venue.</p>
+          <p className="text-slate-400 text-lg mb-10 max-w-xl mx-auto">Join hundreds of happy clients who&apos;ve hosted unforgettable events at Ralphy&apos;s Venue.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href={isLoggedIn ? '/client/dashboard' : '/register'}
               className="px-10 py-4 font-black text-base rounded-xl transition-all hover:-translate-y-0.5 active:scale-95 text-white"
@@ -245,7 +223,7 @@ export default function Home() {
                 style={{ background: 'linear-gradient(135deg, #0ea5e9, #0369a1)' }}>E</div>
               <span className="text-white font-black text-lg">EventPro</span>
             </div>
-            <p className="text-slate-500 text-sm leading-relaxed">Professional event management at Ralphy's Venue. Creating unforgettable memories.</p>
+            <p className="text-slate-500 text-sm leading-relaxed">Professional event management at Ralphy&apos;s Venue. Creating unforgettable memories.</p>
           </div>
           <div>
             <h3 className="text-white font-bold text-sm mb-4 uppercase tracking-widest">Quick Links</h3>
@@ -260,14 +238,15 @@ export default function Home() {
             <ul className="space-y-2 text-sm text-slate-500">
               <li>Basak San Nicolas Villa Kalubihan, Cebu City 6000</li>
               <li>0993 926 1681</li>
-              <li>ralphydev@gmail.com</li>
+              <li>ralph.villarojo@gmail.com</li>
             </ul>
           </div>
         </div>
         <div className="text-center py-4 text-xs text-slate-700" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-          © {new Date().getFullYear()} EventPro — Ralphy's Venue. All rights reserved.
+          © {new Date().getFullYear()} EventPro — Ralphy&apos;s Venue. All rights reserved.
         </div>
       </footer>
     </div>
   );
 }
+

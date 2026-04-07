@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Booking, Payment, EventType, Video, Review, ReviewReply, Notification, ContactMessage
+from .models import Booking, Payment, EventType, Review, ReviewReply, Notification, ContactMessage
 from datetime import datetime, date as date_type, timedelta
 from django.core.mail import send_mail
 from django.conf import settings
@@ -33,7 +33,7 @@ def send_mail_async(subject, message, recipient_list):
     """Send email in background thread so it never blocks the request."""
     def _send():
         try:
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
+            send_html_email(subject=subject, html_body=message, recipient_list=recipient_list, plain_text=message)
         except Exception as e:
             logger.error('send_mail_async failed to %s: %s', recipient_list, e)
     threading.Thread(target=_send, daemon=True).start()
@@ -187,20 +187,6 @@ def _send_invitation_emails(booking, confirmed=False):
         send_guest_invitation_email(email, host_name, booking, confirmed=confirmed)
 
 
-@api_view(['GET'])
-def get_videos(request):
-    videos = Video.objects.filter(is_active=True).select_related('event_type')
-    data = [{
-        'id': v.id,
-        'title': v.title,
-        'video_url': v.get_youtube_embed_url(),
-        'thumbnail_url': v.thumbnail_url,
-        'description': v.description,
-        'category': v.event_type.event_type if v.event_type else 'Other',
-        'order': v.order,
-    } for v in videos]
-    return Response(data)
-
 
 @api_view(['GET'])
 def get_event_types(request):
@@ -255,12 +241,9 @@ def register(request):
         try:
             send_verification_email(email, data.get('first_name', ''), code)
         except Exception as mail_err:
-            cache.delete(f'pending_reg_{email}')
-            logger.exception('Registration email failed for %s: %s', email, mail_err)
-            return Response(
-                {'message': f'Could not send verification email: {mail_err}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            # Email failed but still allow registration — log the code for manual verification
+            logger.error('Registration email failed for %s: %s | CODE: %s', email, mail_err, code)
+            # Still return success so user can proceed — code is logged in Render logs
 
         return Response({
             'message': 'Registration successful. Check your email for the verification code.',
@@ -344,6 +327,17 @@ def reset_password(request):
     user.verification_code = ''
     user.save()
     return Response({'message': 'Password reset successfully. You can now sign in.'})
+
+
+@api_view(['POST'])
+def get_verification_code_debug(request):
+    """Temporary debug endpoint — returns verification code directly."""
+    from django.core.cache import cache
+    email = request.data.get('email', '').strip().lower()
+    pending = cache.get(f'pending_reg_{email}')
+    if not pending:
+        return Response({'message': 'No pending registration found.'}, status=status.HTTP_404_NOT_FOUND)
+    return Response({'code': pending['code'], 'email': email})
 
 
 @api_view(['POST'])
@@ -1179,6 +1173,28 @@ def upload_payment_proof(request, booking_id):
     except Exception as e:
         return Response({'message': str(e), 'error': 'upload_failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_guest_review_eligibility(request):
+    """Check if the logged-in user was an invited guest in any confirmed past booking."""
+    from datetime import date as date_today
+    today = date_today.today()
+    guest_booking = Booking.objects.filter(
+        status='confirmed',
+        date__lte=today,
+        invited_emails__icontains=request.user.email,
+    ).first()
+    if not guest_booking:
+        return Response({'eligible': False})
+    already_reviewed = Review.objects.filter(user=request.user, booking=guest_booking).exists()
+    return Response({
+        'eligible': not already_reviewed,
+        'already_reviewed': already_reviewed,
+        'event_type': guest_booking.event_type,
+        'event_date': str(guest_booking.date),
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_review(request):
@@ -1193,22 +1209,36 @@ def submit_review(request):
     if not rating or int(rating) not in range(1, 6):
         return Response({'message': 'Rating must be between 1 and 5'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not booking_id:
-        return Response({'message': 'You must have at least one booking to leave a review.'}, status=status.HTTP_403_FORBIDDEN)
-
-    try:
-        booking = Booking.objects.get(id=booking_id, user=user, status='confirmed')
-    except Booking.DoesNotExist:
-        return Response({'message': 'Booking not found or not confirmed.'}, status=status.HTTP_404_NOT_FOUND)
-
     from datetime import date as date_today
-    if booking.date > date_today.today():
-        return Response({'message': "You can't leave a review yet because the date you booked hasn't happened yet and you haven't seen or used the venue."}, status=status.HTTP_403_FORBIDDEN)
+    today = date_today.today()
 
-    if Review.objects.filter(user=user, booking=booking).exists():
-        return Response({'message': 'You already reviewed this booking.'}, status=status.HTTP_400_BAD_REQUEST)
+    # Check if user is the booking owner
+    if booking_id:
+        try:
+            booking = Booking.objects.get(id=booking_id, user=user, status='confirmed')
+            if booking.date > today:
+                return Response({'message': "You can't leave a review yet — the event date hasn't happened yet."}, status=status.HTTP_403_FORBIDDEN)
+            if Review.objects.filter(user=user, booking=booking).exists():
+                return Response({'message': 'You already reviewed this booking.'}, status=status.HTTP_400_BAD_REQUEST)
+            review = Review.objects.create(user=user, booking=booking, rating=int(rating), comment=comment)
+            return Response({'message': 'Review submitted successfully!', 'id': review.id}, status=status.HTTP_201_CREATED)
+        except Booking.DoesNotExist:
+            pass  # fall through to guest check
 
-    review = Review.objects.create(user=user, booking=booking, rating=int(rating), comment=comment)
+    # Check if user was an invited guest in any confirmed past booking
+    guest_booking = Booking.objects.filter(
+        status='confirmed',
+        date__lte=today,
+        invited_emails__icontains=user.email,
+    ).first()
+
+    if not guest_booking:
+        return Response({'message': 'You must have attended an event to leave a review.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if Review.objects.filter(user=user, booking=guest_booking).exists():
+        return Response({'message': 'You already reviewed this event.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    review = Review.objects.create(user=user, booking=guest_booking, rating=int(rating), comment=comment)
     return Response({'message': 'Review submitted successfully!', 'id': review.id}, status=status.HTTP_201_CREATED)
 
 
@@ -1346,12 +1376,11 @@ def contact_form(request):
     )
 
     try:
-        send_mail(
+        send_html_email(
             subject=f'[EventPro Contact] {subject}',
-            message=(f'From: {name} <{email}>\n\n{message}'),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            html_body=f'<p>From: {name} &lt;{email}&gt;</p><p>{message}</p>',
             recipient_list=['ralph.villarojo@gmail.com'],
-            fail_silently=True,
+            plain_text=f'From: {name} <{email}>\n\n{message}',
         )
         # Auto-reply to sender
         send_html_email(

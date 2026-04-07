@@ -13,7 +13,7 @@ class User(AbstractUser):
     profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
     email_verified = models.BooleanField(default=False)
     verification_code = models.CharField(max_length=6, blank=True)
-    
+
     groups = models.ManyToManyField(
         'auth.Group',
         related_name='custom_user_set',
@@ -24,12 +24,13 @@ class User(AbstractUser):
         related_name='custom_user_set',
         blank=True
     )
-    
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
-    
+
     def __str__(self):
         return self.email
+
 
 class EventType(models.Model):
     event_type = models.CharField(max_length=100, unique=True)
@@ -45,7 +46,6 @@ class EventType(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def get_image(self):
-        """Returns image URL — prefers uploaded file, falls back to image_url."""
         if self.image:
             return self.image.url
         return self.image_url or None
@@ -56,7 +56,8 @@ class EventType(models.Model):
         verbose_name_plural = 'Event Types'
 
     def __str__(self):
-        return f"{self.event_type} - ₱{self.price}"
+        return f"{self.event_type} - \u20b1{self.price}"
+
 
 class Booking(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookings')
@@ -82,13 +83,13 @@ class Booking(models.Model):
     special_requests = models.TextField(blank=True, null=True, default='')
     payment_deadline = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return f"{self.user.email} - {self.event_type} on {self.date}"
-    
+
     def calculate_amount(self):
         try:
             event_type_obj = EventType.objects.get(event_type=self.event_type, is_active=True)
@@ -96,8 +97,9 @@ class Booking(models.Model):
         except EventType.DoesNotExist:
             base = Decimal('5000')
         if self.time_slot == 'whole_day' or self.whole_day:
-            return round(base * 2 * Decimal('0.8'), 2)  # 20% discount
+            return round(base * 2 * Decimal('0.8'), 2)
         return base
+
 
 class Payment(models.Model):
     booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name='payment')
@@ -108,12 +110,13 @@ class Payment(models.Model):
     reference_number = models.CharField(max_length=100, unique=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return f"Payment {self.reference_number} - {self.client_name}"
+
 
 class Review(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews', null=True, blank=True)
@@ -128,7 +131,7 @@ class Review(models.Model):
 
     def __str__(self):
         identifier = self.user.email if self.user else self.guest_email
-        return f"{identifier} - {self.rating}★"
+        return f"{identifier} - {self.rating}\u2605"
 
 
 class ReviewReply(models.Model):
@@ -172,43 +175,4 @@ class ContactMessage(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.name} — {self.subject}"
-
-
-class Video(models.Model):
-    title = models.CharField(max_length=200)
-    video_url = models.URLField(max_length=500, help_text='YouTube video URL')
-    thumbnail_url = models.URLField(max_length=500, blank=True, help_text='Optional: Custom thumbnail URL')
-    description = models.TextField(blank=True)
-    event_type = models.ForeignKey(
-        EventType,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='videos',
-        help_text='Select the event type this video belongs to'
-    )
-    order = models.IntegerField(default=0, help_text='Display order (lower numbers appear first)')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    @property
-    def category(self):
-        return self.event_type.event_type if self.event_type else 'Other'
-
-    class Meta:
-        ordering = ['order', '-created_at']
-        verbose_name = 'Video'
-        verbose_name_plural = 'Videos'
-
-    def __str__(self):
-        return self.title
-
-    def get_youtube_embed_url(self):
-        if 'youtube.com/watch?v=' in self.video_url:
-            vid_id = self.video_url.split('watch?v=')[1].split('&')[0]
-        elif 'youtu.be/' in self.video_url:
-            vid_id = self.video_url.split('youtu.be/')[1].split('?')[0]
-        else:
-            return self.video_url
-        return f'https://www.youtube.com/embed/{vid_id}'
+        return f"{self.name} \u2014 {self.subject}"

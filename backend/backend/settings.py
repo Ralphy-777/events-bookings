@@ -18,11 +18,13 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 
 import os
+import importlib.util
 from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 load_dotenv()
 
@@ -43,33 +45,36 @@ def env_bool(name: str, default: bool = False) -> bool:
     return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
-def with_extra_hosts(*hosts: str) -> list[str]:
-    items: list[str] = []
-    for host in hosts:
-        if host and host not in items:
-            items.append(host)
-    return items
+DEBUG = env_bool('DEBUG', False)
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-insecure-key-change-in-production')
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'dev-only-insecure-secret-key'
+    else:
+        raise ImproperlyConfigured('SECRET_KEY must be set when DEBUG is False.')
 
-# Allow Render domain + any custom domain automatically
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    'event-backend-5-v9tx.onrender.com',
-    '.onrender.com',
-    '.vercel.app',
-    os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip(),
+DEFAULT_FRONTEND_ORIGINS = [
+    'https://events-booking-7udo.vercel.app',
+    'https://event-bookings-git-main-ralphy-777s-projects.vercel.app',
+    'https://event-bookings-eosin.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
 ]
-ALLOWED_HOSTS = [h for h in ALLOWED_HOSTS if h]  # remove empty strings
+
+FRONTEND_URL = os.environ.get('FRONTEND_URL', DEFAULT_FRONTEND_ORIGINS[0]).strip()
+BACKEND_URL = os.environ.get('BACKEND_URL', 'http://127.0.0.1:8000').strip()
+
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+_render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip()
+if _render_hostname and _render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_hostname)
 
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
     'daphne',
-    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -83,6 +88,10 @@ INSTALLED_APPS = [
     'channels',
 ]
 
+# Keep backend booting even if jazzmin isn't installed in a deployment image.
+if importlib.util.find_spec('jazzmin') is not None:
+    INSTALLED_APPS.insert(1, 'jazzmin')
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -95,19 +104,28 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-_extra_csrf = env_list('CSRF_TRUSTED_ORIGINS')
+_cors_allow_all = env_bool('CORS_ALLOW_ALL_ORIGINS', False)
+if _cors_allow_all:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = env_list(
+        'CORS_ALLOWED_ORIGINS',
+        ','.join(dict.fromkeys([FRONTEND_URL, *DEFAULT_FRONTEND_ORIGINS]))
+    )
+
+_extra_csrf = env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    ','.join(dict.fromkeys([
+        FRONTEND_URL,
+        *DEFAULT_FRONTEND_ORIGINS,
+        BACKEND_URL,
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+    ]))
+)
 CSRF_TRUSTED_ORIGINS = list({
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'https://event-bookings-eosin.vercel.app',
-    'https://event-booking-chi.vercel.app',
-    'https://event-bookings-git-main-ralphy-777s-projects.vercel.app',
-    'https://events-booking-7udo.vercel.app',
-    'https://event-backend-5-v9tx.onrender.com',
-    'https://*.vercel.app',
     *_extra_csrf,
 })
 
@@ -207,9 +225,23 @@ STORAGES = {
         'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
     },
 }
+# Fallback so admin/static can still be served even if collectstatic was skipped
+# on a deployment; useful for platforms where build settings drift.
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Media storage — Cloudinary on Render, local filesystem in dev
+_CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL', '')
+if _CLOUDINARY_URL:
+    import cloudinary
+    cloudinary.config(cloudinary_url=_CLOUDINARY_URL)
+    INSTALLED_APPS = ['cloudinary_storage', 'cloudinary'] + INSTALLED_APPS
+    STORAGES['default'] = {
+        'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
+    }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -222,7 +254,7 @@ JAZZMIN_SETTINGS = {
     'search_model': ['user.User', 'user.Booking'],
     'topmenu_links': [
         {'name': 'Home', 'url': 'admin:index', 'permissions': ['auth.view_user']},
-        {'name': 'Site', 'url': 'https://event-bookings-eosin.vercel.app', 'new_window': True},
+        {'name': 'Site', 'url': FRONTEND_URL, 'new_window': True},
     ],
     'show_sidebar': True,
     'navigation_expanded': True,
@@ -287,16 +319,13 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 
 # GCash Manual Payment
-GCASH_RECEIVER_NUMBER = os.environ.get('GCASH_RECEIVER_NUMBER', '09939261681')
-GCASH_RECEIVER_NAME = os.environ.get('GCASH_RECEIVER_NAME', 'Liberato Villarojo')
+GCASH_RECEIVER_NUMBER = os.environ.get('GCASH_RECEIVER_NUMBER', '').strip()
+GCASH_RECEIVER_NAME = os.environ.get('GCASH_RECEIVER_NAME', '').strip()
 
 # PayMongo
 PAYMONGO_SECRET_KEY = os.environ.get('PAYMONGO_SECRET_KEY', '')
 PAYMONGO_PUBLIC_KEY = os.environ.get('PAYMONGO_PUBLIC_KEY', '')
-PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
-
-# Frontend URL
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://event-bookings-eosin.vercel.app')
+PAYMONGO_BASE_URL = os.environ.get('PAYMONGO_BASE_URL', 'https://api.paymongo.com/v1').strip()
 
 # Cache — Redis on Render if available, otherwise local memory
 _REDIS_URL = os.environ.get('REDIS_URL', '')
@@ -319,6 +348,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = f'EventPro <{os.environ.get("EMAIL_HOST_USER", "")}>'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '').strip()
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '').strip()
+DEFAULT_FROM_EMAIL = f'EventPro <{EMAIL_HOST_USER}>' if EMAIL_HOST_USER else 'EventPro <noreply@eventpro.com>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+EMAIL_TIMEOUT = 30
